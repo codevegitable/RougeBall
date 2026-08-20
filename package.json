@@ -1,60 +1,24 @@
 {
-  "name": "html5-boilerplate",
-  "version": "9.0.1",
-  "homepage": "https://html5boilerplate.com/",
+  "name": "bounce-roguelike",
+  "version": "1.0.0",
+  "private": true,
   "license": "MIT",
-  "description": "A professional front-end template for building fast, robust, and adaptable web apps or sites.",
-  "keywords": [
-    "h5bp",
-    "template",
-    "front-end"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/h5bp/html5-boilerplate.git"
-  },
-  "bugs": {
-    "url": "https://github.com/h5bp/html5-boilerplate/issues"
-  },
+  "description": "弹球 Roguelike —— 基于 Canvas 的弹球闯关小游戏",
   "scripts": {
-    "build": "gulp build",
-    "prettier": "prettier --write ./**/*.{js,json,md,mjs,yml}",
-    "test": "gulp archive && mocha --reporter spec --timeout 5000"
-  },
-  "devDependencies": {
-    "archiver": "^7.0.1",
-    "del": "^7.1.0",
-    "eslint": "^8.57.0",
-    "eslint-config-recommended": "^4.1.0",
-    "eslint-plugin-mocha": "^10.4.1",
-    "glob": "^10.3.12",
-    "gulp": "^5.0.0",
-    "gulp-autoprefixer": "^9.0.0",
-    "gulp-eslint": "^6.0.0",
-    "gulp-header": "^2.0.9",
-    "gulp-rename": "^2.0.0",
-    "main.css": "3.0.0",
-    "mocha": "^10.4.0",
-    "prettier": "3.2.5",
-    "strip-json-comments": "^5.0.1"
+    "dev": "webpack serve --mode development",
+    "build": "webpack --mode production"
   },
   "engines": {
     "node": ">=18",
     "npm": ">=10"
   },
-  "h5bp-configs": {
-    "directories": {
-      "archive": "archive",
-      "dist": "dist",
-      "src": "src",
-      "test": "test"
-    }
-  },
-  "files": [
-    "CHANGELOG.md",
-    "LICENSE.txt",
-    "package.json",
-    "dist/",
-    "README.md"
-  ]
+  "devDependencies": {
+    "css-loader": "^7.1.2",
+    "html-webpack-plugin": "^5.6.3",
+    "mini-css-extract-plugin": "^2.9.2",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.97.1",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.2.0"
+  }
 }

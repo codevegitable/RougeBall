@@ -1,121 +1,55 @@
-# [HTML5 Boilerplate](https://html5boilerplate.com/)
+# 弹球 Roguelike
 
-[![Build status](https://github.com/h5bp/html5-boilerplate/workflows/Build%20status/badge.svg)](https://github.com/h5bp/html5-boilerplate/actions?query=workflow%3A%22Build+status%22+branch%3Amain)
-[![LICENSE](https://img.shields.io/badge/license-MIT-lightgrey.svg)](https://github.com/h5bp/html5-boilerplate/blob/main/LICENSE.txt)
-[![NPM Downloads](https://img.shields.io/npm/dt/html5-boilerplate.svg)](https://www.npmjs.com/package/html5-boilerplate)
-[![github-stars-image](https://img.shields.io/github/stars/h5bp/html5-boilerplate.svg?label=github%20stars)](https://github.com/h5bp/html5-boilerplate)
+基于 Canvas 的弹球闯关小游戏：移动鼠标控制挡板，点击发射小球，击碎所有方块过关。
+参考《杀戮尖塔》的构筑设计，共 50 层。
 
-HTML5 Boilerplate is a professional front-end template for building
-fast, robust, and adaptable web apps or sites.
+## 游戏系统
 
-This project is the product of over 10 years of iterative development and
-community knowledge. It does not impose a specific development
-philosophy or framework, so you're free to architect your code in the
-way that you want.
+- **奖励体系（34 种效果）**
+  - 三种稀有度：普通 / 罕见 / 稀有，稀有度越高效果越强
+  - 三类效果：加成（数值提升）/ 技能（主动释放，最多装备 2 个，数字键 1/2 释放）/ 能力（被动与局外收益，如奖励选卡 +1、稀有概率提升）
+  - 开局从 3 张随机稀有度的奖励中任选一张
+- **关卡难度递增**：方块血量提高、不可击碎方块（障碍物，清光其他方块即可过关）、左右移动的方块、会向挡板射击的方块
+- **Boss 战**：第 15 / 30 / 45 / 50 关是东方风格弹幕 Boss（不是方块，用球攻击）；Boss 关球落地不扣血，被弹幕击中才扣血；击败 Boss 必掉稀有奖励
+- **事件房**：过关后有概率遭遇事件（13 种），包括商人/赌局/生命泉/暗影祭坛/虚空裂缝/圣光/黑市/篝火/附魔工坊/时光裂缝/许愿井/遗迹图书馆/限时挑战；可选跳过，选完先显示结果再离开
+- **暂停与存档**：ESC 暂停（继续/重开/保存退出）；进度自动保存到 localStorage，主菜单可继续上次冒险
+- **打击感与音效**：震屏、顿帧、冲击波、漂浮文字，Web Audio 程序化音效；按 `M` 键开关音效
 
-- [Homepage](https://html5boilerplate.com/)
-- [Source Code](https://github.com/h5bp/html5-boilerplate)
+## 开发
 
-## About This Repository
+```bash
+npm install
+npm run dev      # 启动开发服务器（默认 http://localhost:8080，自动打开浏览器）
+npm run build    # 构建到 dist/，直接打开 dist/index.html 即可游玩
+```
 
-This repository is where HTML5-Boilerplate is authored. Some of the tools,
-files and processes that you see here are solely for the _production_ of
-HTML5 Boilerplate and are not _part_ of HTML5 Boilerplate. For one example, the
-[gulpfile.mjs](https://github.com/h5bp/html5-boilerplate/blob/main/gulpfile.mjs)
-script is used to _build_ the project. It's not part of the project itself.
+## 配置
 
-The project we publish is represented by the contents of the `/dist/`
-folder. Everything else in this repository is used to author the project.
+`src/js/config.js`：音效开关与音量、震屏、顿帧、事件房概率。
 
-Think of it this way, in the same way that you don't clone [vuejs/core](https://github.com/vuejs/core)
-to create a Vue.js app, you don't need to clone this repository to start a new
-site or app based on HTML5 Boilerplate.
+## 目录结构
 
-So, if you're looking for a quick start template to build a website or
-application, look at the options in the
-[Quick Start](https://github.com/h5bp/html5-boilerplate#quick-start) section of this document.
-
-If you want to help us _improve_ HTML5 Boilerplate then you can start with the documentation [here](.github/CONTRIBUTING.md), which includes steps to clone this repo in order to get it set up for development.
-
-## Quick Start
-
-Choose one of the following options:
-
-- Using the [create-html5-boilerplate](https://github.com/h5bp/create-html5-boilerplate)
-  script, instantly fetch the latest npm published package (or any version
-  available on npm) with `npx`, `npm init` or `yarn create` without having to
-  install any dependencies. Running the following `npx` command installs the
-  latest version into a folder called `new-site`
-
-  ```bash
-  npx create-html5-boilerplate new-site
-  cd new-site
-  npm install
-  npm run start
-  ```
-
-- Using our new [Template Repository](https://github.com/h5bp/html5-boilerplate-template)
-  create a new GitHub repository based on the latest code from the main branch of HTML5
-  Boilerplate.
-
-- Install with [npm](https://www.npmjs.com/): `npm install html5-boilerplate`
-  or [yarn](https://yarnpkg.com/): `yarn add html5-boilerplate`. The resulting
-  `node_modules/html5-boilerplate/dist` folder represents the latest version of
-  the project for end users. Depending on what you want to use and how you want
-  to use it, you may have to copy and paste the contents of that folder into
-  your project directory.
-
-- Download the latest stable release from
-  [here](https://github.com/h5bp/html5-boilerplate/releases/download/v9.0.0/html5-boilerplate_v9.0.0.zip). This zip file is a
-  snapshot of the `dist` folder. On Windows, Mac and from the file manager on
-  Linux unzipping this folder will output to a folder named something like
-  `html5-boilerplate_v9.0.0`. From the command-line, you will need to create a
-  folder and unzip the contents into that folder.
-
-  ```bash
-  mkdir html5-boilerplate
-  unzip html5-boilerplate*.zip -d html5-boilerplate
-  ```
-
-## Features
-
-- A finely-tuned starter template: Reap the benefits of 10 years of analysis,
-  research and experimentation by over 200 contributors.
-- Designed with progressive enhancement in mind.
-- Includes:
-  - Placeholder Open Graph elements and attributes.
-  - An example package.json file with [WebPack](https://webpack.js.org/) commands
-    built in to jumpstart application development.
-  - Placeholder CSS Media Queries.
-  - Useful CSS helper classes.
-  - Default print styles, performance optimized.
-  - "Delete-key friendly." Easy to strip out parts you don't need.
-  - Extensive documentation.
-
-## Browser Support
-
-HTML5-Boilerplate supports the latest, stable releases of all major browsers.
-
-Check the `default` configuration from [Browserslist](https://browsersl.ist/#q=defaults)
-for more details on browsers and versions covered.
-
-## Documentation
-
-Take a look at the [documentation table of contents](docs/TOC.md). This
-documentation is bundled with the project which makes it available for offline
-reading and provides a useful starting point for any documentation you want to
-write about your project.
-
-## Contributing
-
-Hundreds of developers have helped to make the HTML5 Boilerplate. Anyone is
-welcome to [contribute](.github/CONTRIBUTING.md). However, if you decide to get
-involved, please take a moment to review the [guidelines](.github/CONTRIBUTING.md):
-
-- [Bug reports](.github/CONTRIBUTING.md#bugs)
-- [Feature requests](.github/CONTRIBUTING.md#features)
-- [Pull requests](.github/CONTRIBUTING.md#pull-requests)
-
-## License
-
-The code is available under the [MIT license](LICENSE.txt).
+```
+src/
+├── index.html          # 页面模板
+├── css/style.css       # 样式
+└── js/
+    ├── index.js        # 入口：初始化、输入处理、游戏循环
+    ├── config.js       # 打击感、音效与进程配置
+    ├── constants.js    # 常量：尺寸、颜色、状态、稀有度、进度
+    ├── state.js        # 全局共享的游戏状态与记分/扣血
+    ├── canvas.js       # Canvas 初始化与窗口缩放
+    ├── utils.js        # 通用工具函数
+    ├── stars.js        # 星空背景
+    ├── particles.js    # 粒子特效
+    ├── levels.js       # 手工关卡与程序化生成（含方块机制）
+    ├── rewards.js      # 奖励定义、选卡、属性重算、主动技能
+    ├── events.js       # 事件房定义与执行
+    ├── boss.js         # Boss 战：弹幕、命中、绘制
+    ├── physics.js      # 挡板/球/方块/敌弹物理与连锁效果
+    ├── game.js         # 游戏流程：重置、关卡、奖励、事件、主循环 update
+    ├── render.js       # 游戏画面绘制（挡板/球/方块/Boss 等）
+    ├── ui.js           # HUD 与各界面绘制、按钮命中检测
+    ├── fx.js           # 打击感特效：震屏/顿帧/圆环/漂浮文字
+    └── sound.js        # Web Audio 程序化音效
+```
