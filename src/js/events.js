@@ -110,7 +110,7 @@ const ACTION_RUNNERS = {
         }
         state.player.score = Math.max(0, state.player.score - a.scoreCost);
         playEventBad();
-        return { text: `分数 -${a.scoreCost}（被裂缝吞噬）`, color: "#ff8080" };
+        return { text: `分数 -${a.scoreCost / 10}（被裂缝吞噬）`, color: "#ff8080" };
     },
     blessing() {
         state.player.rewardBoost = RARITY.UNCOMMON;
@@ -129,7 +129,7 @@ const ACTION_RUNNERS = {
     score(a) {
         addScore(a.amount);
         playEventGood();
-        return { text: `分数 +${a.amount}，精神焕发`, color: "#ffd700" };
+        return { text: `分数 +${a.amount / 10}，精神焕发`, color: "#ffd700" };
     },
     rewardNoSkill(a) {
         const def = rollBundleNoSkill(a.rarity);

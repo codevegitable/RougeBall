@@ -22,10 +22,10 @@ export const EVENT_DATA = [
         id: "merchant",
         name: "神秘商人",
         icon: "🧙",
-        desc: "一位披着斗篷的商人向你展示了一件商品：\n花费 800 分，换取一个随机的罕见奖励。",
+        desc: "一位披着斗篷的商人向你展示了一件商品：\n花费 80 分，换取一个随机的罕见奖励。",
         skippable: true,
         choices: [
-            { label: "购买（800 分）", needScore: 800, action: { kind: "buy", cost: 800, rarity: "uncommon" } },
+            { label: "购买（80 分）", needScore: 800, action: { kind: "buy", cost: 800, rarity: "uncommon" } },
             { label: "离开", action: { kind: "leave" } },
         ],
     },
@@ -76,7 +76,7 @@ export const EVENT_DATA = [
         id: "void",
         name: "虚空裂缝",
         icon: "🕳️",
-        desc: "裂缝中传来未知的低语：\n60% 概率获得随机奖励，40% 概率失去 150 分。",
+        desc: "裂缝中传来未知的低语：\n60% 概率获得随机奖励，40% 概率失去 15 分。",
         skippable: true,
         choices: [
             { label: "伸手一探", action: { kind: "voidGamble", scoreCost: 150 } },
@@ -108,7 +108,7 @@ export const EVENT_DATA = [
         id: "campfire",
         name: "篝火营地",
         icon: "🏕️",
-        desc: "温暖的火光让人安心。\n获得 1000 分。",
+        desc: "温暖的火光让人安心。\n获得 100 分。",
         skippable: false,
         choices: [
             { label: "休息片刻", action: { kind: "score", amount: 1000 } },

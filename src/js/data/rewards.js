@@ -11,16 +11,16 @@ export const REWARD_DATA = [
     { id: "power_ball", name: "强化球体", icon: "⚡", rarity: "common", type: "bonus", maxStacks: 5, desc: "球伤害 +1" },
     { id: "slow_ball", name: "减速球", icon: "🐢", rarity: "common", type: "bonus", maxStacks: 3, desc: "球速度 -12%（更易控制）" },
     { id: "extra_life", name: "额外生命", icon: "❤️", rarity: "common", type: "bonus", maxStacks: 99, applyId: "lives1", desc: "获得 1 条额外生命" },
-    { id: "score_boost", name: "分数加成", icon: "⭐", rarity: "common", type: "bonus", maxStacks: 99, applyId: "score500", desc: "立即获得 500 分" },
+    { id: "score_boost", name: "分数加成", icon: "⭐", rarity: "common", type: "bonus", maxStacks: 99, applyId: "score500", desc: "立即获得 50 分" },
     { id: "wider_paddle", name: "加宽挡板", icon: "↔️", rarity: "common", type: "bonus", maxStacks: 4, desc: "挡板宽度 +25%" },
-    { id: "entry_gain", name: "初始收益", icon: "💰", rarity: "common", type: "bonus", maxStacks: 5, desc: "进入每关时额外获得 50 分" },
+    { id: "entry_gain", name: "初始收益", icon: "💰", rarity: "common", type: "bonus", maxStacks: 5, desc: "进入每关时额外获得 5 分" },
     { id: "spark_core", name: "火花核心", icon: "✨", rarity: "common", type: "ability", maxStacks: 3, desc: "击碎方块时额外获得 30 分" },
     { id: "mega_ball", name: "极限球体", icon: "⚡⚡", rarity: "uncommon", type: "bonus", maxStacks: 3, desc: "球伤害 +2" },
     { id: "big_life", name: "高级生命", icon: "💖", rarity: "uncommon", type: "bonus", maxStacks: 5, applyId: "lives2", desc: "获得 2 条额外生命" },
     { id: "giant_paddle", name: "巨型挡板", icon: "🛡️", rarity: "uncommon", type: "bonus", maxStacks: 2, desc: "挡板宽度 +50%" },
     { id: "cd_reduction", name: "急速冷却", icon: "⏱️", rarity: "uncommon", type: "bonus", maxStacks: 3, desc: "主动技能冷却时间 -20%" },
     { id: "annihil_ball", name: "湮灭球体", icon: "⚡⚡⚡", rarity: "rare", type: "bonus", maxStacks: 2, desc: "球伤害 +3" },
-    { id: "life_crown", name: "生命之冠", icon: "👑", rarity: "rare", type: "bonus", maxStacks: 3, applyId: "crown", desc: "获得 3 条生命与 500 分" },
+    { id: "life_crown", name: "生命之冠", icon: "👑", rarity: "rare", type: "bonus", maxStacks: 3, applyId: "crown", desc: "获得 3 条生命与 50 分" },
     // ═══ 主动技能 ═══
     { id: "ghost", name: "幽灵穿越", icon: "👻", rarity: "rare", type: "skill", cooldown: 25, desc: "3 秒内球不会被方块弹回" },
     { id: "slow_time", name: "时间缓速", icon: "⏳", rarity: "uncommon", type: "skill", cooldown: 30, desc: "8 秒内所有球速度 -40%" },
@@ -35,11 +35,11 @@ export const REWARD_DATA = [
     { id: "crimson_storm", name: "猩红风暴", icon: "🔴", rarity: "uncommon", type: "skill", cooldown: 30, tierLock: 1, desc: "5 秒内球分裂出 2 个额外球" },
     { id: "blood_siphon", name: "血之吸吮", icon: "🩸", rarity: "uncommon", type: "skill", cooldown: 40, tierLock: 1, desc: "8 秒内击碎方块回复 0.3 命" },
     { id: "golden_shield", name: "黄金之盾", icon: "🟡", rarity: "rare", type: "skill", cooldown: 40, tierLock: 2, desc: "6 秒内无敌" },
-    { id: "wealth_rain", name: "财富之雨", icon: "💰", rarity: "rare", type: "skill", cooldown: 30, tierLock: 2, desc: "立即获得 2000 分" },
+    { id: "wealth_rain", name: "财富之雨", icon: "💰", rarity: "rare", type: "skill", cooldown: 30, tierLock: 2, desc: "立即获得 200 分" },
     // ═══ 皮肤开场技能 ═══
     { id: "jade_barrier", name: "翡翠屏障", icon: "🟢", rarity: "uncommon", type: "skill", cooldown: 35, skinOnly: true, desc: "5 秒内受击不扣血" },
     { id: "swift_blade", name: "迅捷之刃", icon: "🔴", rarity: "uncommon", type: "skill", cooldown: 30, skinOnly: true, desc: "5 秒内球伤害 ×1.5" },
-    { id: "golden_blessing", name: "黄金祝福", icon: "🟡", rarity: "uncommon", type: "skill", cooldown: 35, skinOnly: true, desc: "立即获得 500 分，8 秒内分数 ×2" },
+    { id: "golden_blessing", name: "黄金祝福", icon: "🟡", rarity: "uncommon", type: "skill", cooldown: 35, skinOnly: true, desc: "立即获得 50 分，8 秒内分数 ×2" },
     // ═══ 被动能力 ═══
     { id: "piercing", name: "穿透", icon: "💠", rarity: "uncommon", type: "ability", maxStacks: 3, desc: "球击碎方块后可穿透 1 次" },
     { id: "dual_ball", name: "双球开局", icon: "🔵", rarity: "common", type: "ability", maxStacks: 3, desc: "每关开始时额外获得 1 个球" },
@@ -68,7 +68,7 @@ export const REWARD_DATA = [
     { id: "doom_blast", name: "灭世冲击", icon: "☄️", rarity: "rare", type: "bonus", maxStacks: 1, bossOnly: true, desc: "球伤害 +4" },
     { id: "time_weaver", name: "时间编织者", icon: "🕸️", rarity: "rare", type: "bonus", maxStacks: 2, bossOnly: true, desc: "技能冷却时间 -30%" },
     { id: "danmaku_lord", name: "弹幕领主", icon: "🎆", rarity: "rare", type: "ability", maxStacks: 1, bossOnly: true, desc: "释放主动技能时额外发射 3 个球" },
-    { id: "treasury", name: "王之财宝", icon: "👑", rarity: "rare", type: "bonus", maxStacks: 2, bossOnly: true, applyId: "score2000", desc: "立即获得 2000 分，所有分数获取 +20%" },
+    { id: "treasury", name: "王之财宝", icon: "👑", rarity: "rare", type: "bonus", maxStacks: 2, bossOnly: true, applyId: "score2000", desc: "立即获得 200 分，所有分数获取 +20%" },
     { id: "godseed", name: "神速之星", icon: "🌠", rarity: "rare", type: "bonus", maxStacks: 2, bossOnly: true, desc: "球速度 -15%，球伤害 +1" },
 ];
 

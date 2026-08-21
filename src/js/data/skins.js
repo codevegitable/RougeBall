@@ -2,9 +2,9 @@
 
 // 解锁层级：达到 score 分时解锁对应皮肤 + 奖励
 export const UNLOCK_TIERS = [
-    { score: 6000, skin: "emerald", name: "悲叹" },
-    { score: 20000, skin: "crimson", name: "狂怒" },
-    { score: 40000, skin: "golden", name: "终焉" },
+    { score: 30000, skin: "emerald", name: "悲叹" },
+    { score: 60000, skin: "crimson", name: "狂怒" },
+    { score: 120000, skin: "golden", name: "终焉" },
 ];
 
 // 皮肤定义（index -1 为默认皮肤）
