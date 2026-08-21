@@ -36,6 +36,13 @@ src/
 ├── index.html          # 页面模板
 ├── css/style.css       # 样式
 └── js/
+    ├── data/           # ═══ 纯数据（与程序分离，可直接编辑） ═══
+    │   ├── rewards.js  #   奖励数据（40+ 种：加成/技能/能力/Boss专属/皮肤技能）
+    │   ├── curses.js   #   诅咒数据（20 常规 + 5 重诅咒）
+    │   ├── events.js   #   事件房数据（14 种，含选项与行为描述）
+    │   ├── bosses.js   #   Boss 数据（每层 2 候选，含弹幕模式）
+    │   ├── skins.js    #   皮肤与解锁数据（3 皮肤 + 开场技能）
+    │   └── levels.js   #   关卡数据（方块尺寸表/血量表）
     ├── index.js        # 入口：初始化、输入处理、游戏循环
     ├── config.js       # 打击感、音效与进程配置
     ├── constants.js    # 常量：尺寸、颜色、状态、稀有度、进度
@@ -44,16 +51,17 @@ src/
     ├── utils.js        # 通用工具函数
     ├── stars.js        # 星空背景
     ├── particles.js    # 粒子特效
-    ├── levels.js       # 手工关卡与程序化生成（含方块机制）
-    ├── rewards.js      # 奖励定义、选卡、属性重算、主动技能
-    ├── events.js       # 事件房定义与执行
-    ├── curses.js       # 诅咒系统（20 常规 + 5 重诅咒）
-    ├── boss.js         # Boss 战：弹幕、命中、绘制
+    ├── levels.js       # 关卡生成逻辑（读取 data/levels.js）
+    ├── rewards.js      # 奖励逻辑：选卡、属性重算、技能释放（读取 data/rewards.js）
+    ├── events.js       # 事件逻辑：行为解释器（读取 data/events.js）
+    ├── curses.js       # 诅咒逻辑：效果绑定（读取 data/curses.js）
+    ├── boss.js         # Boss 战：弹幕、命中、绘制（读取 data/bosses.js）
     ├── physics.js      # 挡板/球/方块/敌弹物理与连锁效果
     ├── game.js         # 游戏流程：重置、关卡、奖励、诅咒、事件、主循环 update
     ├── render.js       # 游戏画面绘制（挡板/球/方块/Boss 等）
-    ├── ui.js           # HUD 与各界面绘制、按钮命中检测、图鉴
+    ├── ui.js           # HUD 与各界面绘制、按钮命中检测、图鉴、设置
+    ├── unlock.js       # 分数解锁系统（皮肤 + 奖励池）
+    ├── settings.js     # 持久化游戏设置
     ├── fx.js           # 打击感特效：震屏/顿帧/圆环/红闪/漂浮文字
     └── sound.js        # Web Audio 程序化音效
-    └── unlocks.js      # 分数解锁系统（皮肤 + 奖励池）
 ```

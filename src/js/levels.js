@@ -1,15 +1,13 @@
 import { W, H, GRID_Y, BLOCK_GAP } from "./constants.js";
 import { mulberry32 } from "./utils.js";
 import { state } from "./state.js";
+import { BLOCK_SIZE_TABLE, HP_TABLE } from "./data/levels.js";
 
-// 方块尺寸随关卡递减（整体更大，降幅更缓）
+// 方块尺寸随关卡递减（查表）
 function blockSizeFor(level) {
-    if (level <= 3) return { w: 110, h: 34 };
-    if (level <= 6) return { w: 96, h: 30 };
-    if (level <= 10) return { w: 84, h: 27 };
-    if (level <= 15) return { w: 74, h: 24 };
-    if (level <= 25) return { w: 68, h: 22 };
-    if (level <= 40) return { w: 60, h: 19 };
+    for (const row of BLOCK_SIZE_TABLE) {
+        if (level <= row.maxLevel) return { w: row.w, h: row.h };
+    }
     return { w: 54, h: 18 };
 }
 
@@ -36,13 +34,7 @@ export function generateLevel(num) {
 
     // 前 3 关全部 1HP，不用概率表
     const force1HP = num <= 3;
-    const hpTable = [
-        [1, 1, 1, 1, 2],
-        [1, 1, 2, 2, 3],
-        [1, 2, 2, 3, 3],
-        [2, 2, 3, 3, 4],
-    ];
-    const table = hpTable[tier];
+    const table = HP_TABLE[tier];
 
     // 逐行填充分块，每行至少 2 个空隙
     const grid = [];

@@ -1,0 +1,34 @@
+// ═══ 诅咒数据（纯数据，无逻辑） ═══
+// tier: "normal"（常规）| "heavy"（重诅咒，仅事件）
+// effectId: 由 curses.js 解释执行
+
+export const CURSE_DATA = [
+    { id: "swift", name: "轻风", icon: "💨", tier: "normal", desc: (n) => `球速度 +${n * 4}%` },
+    { id: "rust", name: "锈蚀", icon: "🦀", tier: "normal", desc: (n) => `球伤害 -${Math.min(n, 3)}` },
+    { id: "barren", name: "贫瘠", icon: "🏜️", tier: "normal", desc: (n) => `分数获取 -${n * 6}%` },
+    { id: "dim", name: "晦暗", icon: "🌑", tier: "normal", desc: (n) => `稀有奖励概率 -${n * 3}%` },
+    { id: "fortify", name: "加固", icon: "🛡️", tier: "normal", desc: (n) => `方块血量 +${Math.floor(n / 2)}` },
+    { id: "arm", name: "武装", icon: "🔫", tier: "normal", desc: (n) => `射击方块概率 +${n * 2}%` },
+    { id: "bullet", name: "弹幕加速", icon: "💫", tier: "normal", desc: (n) => `敌弹速度 +${n * 4}%` },
+    { id: "cd", name: "迟缓", icon: "🐌", tier: "normal", desc: (n) => `技能 CD +${n * 8}%` },
+    { id: "shrink", name: "收缩", icon: "📏", tier: "normal", desc: (n) => `挡板宽度 -${n * 4}%` },
+    { id: "hitbox", name: "臃肿", icon: "🎯", tier: "normal", desc: (n) => `受击面积 +${n * 8}%` },
+    { id: "dense", name: "密林", icon: "🌿", tier: "normal", desc: (n) => `方块密度 +${n * 3}%` },
+    { id: "launch", name: "疾射", icon: "🏹", tier: "normal", desc: (n) => `发球速度 +${n * 6}%` },
+    { id: "sticky", name: "黏滞", icon: "🫧", tier: "normal", desc: (n) => `挡板响应 -${n * 10}%` },
+    { id: "heal", name: "碎心", icon: "🩸", tier: "normal", desc: (n) => `治疗效果 -${n * 25}%` },
+    { id: "misfortune", name: "霉运", icon: "🍂", tier: "normal", desc: (n) => `奖励选卡 -${n}` },
+    { id: "overcrowd", name: "拥堵", icon: "🚦", tier: "normal", desc: (n) => `多球上限 -${n}` },
+    { id: "ethereal", name: "虚体", icon: "👻", tier: "normal", desc: (n) => `穿透次数 -${n}（至少 0）` },
+    { id: "blur", name: "迷眼", icon: "🌀", tier: "normal", desc: (n) => `球体积 -${n * 6}%` },
+    { id: "accident", name: "事故", icon: "⚠️", tier: "normal", desc: (n) => `事件房概率 +${n * 5}%` },
+    { id: "slowfall", name: "坠落", icon: "💧", tier: "normal", desc: (n) => `球落地额外扣 ${n * 0.5} 命` },
+];
+
+export const HEAVY_CURSE_DATA = [
+    { id: "blood_oath", name: "血誓", icon: "🩸", tier: "heavy", desc: () => "球落地额外 -1 命" },
+    { id: "seal", name: "封印", icon: "🔒", tier: "heavy", desc: () => "技能槽 -1，第 2 槽被封印不可用" },
+    { id: "cataclysm", name: "灾厄", icon: "🌋", tier: "heavy", desc: () => "所有方块血量 +2，密度 +10%" },
+    { id: "blind", name: "蒙蔽", icon: "🕶️", tier: "heavy", desc: () => "奖励选卡 -1，稀有概率 -15%" },
+    { id: "martyr", name: "殉爆", icon: "💥", tier: "heavy", desc: () => "被弹幕击中额外 -1 命" },
+];

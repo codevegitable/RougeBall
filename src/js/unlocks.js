@@ -1,11 +1,10 @@
-// 分数解锁系统：累积分数解锁皮肤与奖励
+// 分数解锁系统逻辑：累积分数解锁皮肤与奖励
+import { UNLOCK_TIERS, SKIN_DEFS, SKIN_START_SKILLS } from "./data/skins.js";
+import { REWARD_DATA } from "./data/rewards.js";
+
 const KEY = "bounceRoguelikeUnlocks";
 const SCORE_KEY = "bounceRoguelikeHighScore";
-const TIERS = [
-    { score: 6000, skin: "emerald", rewards: 2 },
-    { score: 20000, skin: "crimson", rewards: 2 },
-    { score: 40000, skin: "golden", rewards: 2 },
-];
+const TIERS = UNLOCK_TIERS;
 
 export const TOTAL_TIERS = TIERS.length;
 
@@ -71,35 +70,19 @@ export function getHighScore() {
 
 export function skinDef(tierIndex) {
     // tierIndex: -1=默认, 0=翡翠, 1=绯红, 2=金辉
-    const defs = [
-        { name: "默认", paddle1: "#8b3a8b", paddle2: "#c060a0", glow: "rgba(192,96,160,0.55)", skill: null },
-        { name: "翡翠守卫", paddle1: "#3f8f5f", paddle2: "#57b98a", glow: "rgba(79,175,90,0.55)", skill: "jade_barrier" },
-        { name: "绯红之刃", paddle1: "#c03a4a", paddle2: "#e06a7a", glow: "rgba(224,106,122,0.55)", skill: "swift_blade" },
-        { name: "金辉霸主", paddle1: "#d9a441", paddle2: "#f2cd6e", glow: "rgba(242,205,110,0.55)", skill: "golden_blessing" },
-    ];
-    return defs[tierIndex + 1] || defs[0];
+    return SKIN_DEFS[tierIndex + 1] || SKIN_DEFS[0];
 }
 
-// 皮肤开场技能定义（中文名称）
-export const SKIN_START_SKILLS = {
-    jade_barrier: { id: "jade_barrier", name: "翡翠屏障", icon: "🟢", cooldown: 35, desc: "5 秒内受击不扣血", use: "shield_5s" },
-    swift_blade: { id: "swift_blade", name: "迅捷之刃", icon: "🔴", cooldown: 30, desc: "5 秒内球伤害 ×1.5", use: "strike_5s" },
-    golden_blessing: { id: "golden_blessing", name: "黄金祝福", icon: "🟡", cooldown: 35, desc: "立即获得 500 分，8 秒内分数 ×2", use: "wealth_8s" },
-};
+// 皮肤开场技能定义（re-export 保持原接口）
+export { SKIN_START_SKILLS };
 
 // 默认皮肤颜色
-export const DEFAULT_SKIN_COLORS = { paddle1: "#8b3a8b", paddle2: "#c060a0", glow: "rgba(192,96,160,0.55)" };
+export const DEFAULT_SKIN_COLORS = SKIN_DEFS[0] ? { paddle1: SKIN_DEFS[0].paddle1, paddle2: SKIN_DEFS[0].paddle2, glow: SKIN_DEFS[0].glow } : { paddle1: "#8b3a8b", paddle2: "#c060a0", glow: "rgba(192,96,160,0.55)" };
 
-// 奖励是否已解锁（前 6 个新奖励对应 tier 1/2/3，各 2 个）
-const REWARD_TIER_MAP = {
-    guardian_core: 0, greed_eye: 0,
-    vampiric_gem: 1, rapid_cooling: 1,
-    titan_ball: 2, blessed_start: 2,
-    // 解锁技能映射
-    jade_stars: 0, jade_shield: 0,
-    crimson_storm: 1, blood_siphon: 1,
-    golden_shield: 2, wealth_rain: 2,
-};
+// 奖励解锁层级映射（由奖励数据的 tierLock 字段自动推导）
+const REWARD_TIER_MAP = Object.fromEntries(
+    REWARD_DATA.filter((r) => r.tierLock !== undefined).map((r) => [r.id, r.tierLock])
+);
 
 export function isRewardUnlocked(rewardId) {
     const tier = REWARD_TIER_MAP[rewardId];

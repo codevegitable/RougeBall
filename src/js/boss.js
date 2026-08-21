@@ -4,6 +4,7 @@ import { ctx } from "./canvas.js";
 import { spawnParticles } from "./particles.js";
 import { screenShake, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
 import { playBossHit, playBossShoot, playBossDeath, playVictory, playPlayerHit, playWallHit } from "./sound.js";
+import { BOSS_CANDIDATES, BOSS_TIER_INDEX } from "./data/bosses.js";
 
 // 挡板受击区域（与 physics.js 同步）
 function bossHitRect() {
@@ -14,27 +15,6 @@ function bossHitRect() {
 }
 
 // 每层 Boss 2 候选
-const BOSS_CANDIDATES = {
-    15: [
-        { name: "晶核守卫", color: "#5aa7ff", hp: 80, bulletSpeed: 1.6, patterns: ["fan", "ring"] },
-        { name: "回旋机兵", color: "#57d39a", hp: 85, bulletSpeed: 1.4, patterns: ["spiral", "fan"] },
-    ],
-    30: [
-        { name: "双生魔像", color: "#b26bff", hp: 180, bulletSpeed: 1.8, patterns: ["fan", "split", "ring"] },
-        { name: "暗影追猎", color: "#e05a5a", hp: 190, bulletSpeed: 1.7, patterns: ["homing", "wave"] },
-    ],
-    45: [
-        { name: "深渊领主", color: "#ff5a8c", hp: 380, bulletSpeed: 2.0, patterns: ["fan", "split", "wave"] },
-        { name: "混沌核心", color: "#e8a33d", hp: 400, bulletSpeed: 1.9, patterns: ["spiral", "ring", "homing"] },
-    ],
-    50: [
-        { name: "终焉之心", color: "#ff3333", hp: 680, bulletSpeed: 2.1, patterns: ["fan", "split", "homing"] },
-        { name: "虚空主宰", color: "#8f5fe8", hp: 720, bulletSpeed: 2.0, patterns: ["spiral", "wave", "split"] },
-    ],
-};
-
-const TIER_INDEX = [15, 30, 45, 50];
-
 export function createBoss(level) {
     const candidates = BOSS_CANDIDATES[level];
     const def = candidates[Math.floor(Math.random() * candidates.length)];
@@ -43,7 +23,7 @@ export function createBoss(level) {
         hp: def.hp, maxHp: def.hp, patterns: def.patterns,
         x: W / 2, y: 130, r: 56, t: 0, volleyIdx: 0, volleyTimer: 120,
         spiralFrames: 0, spiralAngle: 0, homingQueue: 0, homingTick: 0,
-        flash: 0, tier: TIER_INDEX.indexOf(level),
+        flash: 0, tier: BOSS_TIER_INDEX.indexOf(level),
         // 冲撞
         dash: null, // { phase: "warn"|"dash", timer, tx, ty }
         dashCd: 0,
