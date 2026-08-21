@@ -49,6 +49,9 @@ import {
     hitPenaltyCard,
     hitMenuCodexButton,
     hitMenuSkinButton,
+    hitMenuSettingsButton,
+    hitSettingsBackButton,
+    handleSettingsClick,
     hitPauseCodexButton,
     hitCodexTab,
     hitCodexNext,
@@ -58,6 +61,8 @@ import { initAudio, toggleSound } from "./sound.js";
 import { spawnFloatingText } from "./fx.js";
 import { setCodexTab, setCodexPage } from "./ui.js";
 import { getUnlocks, setSkin, skinDef, getSelectedSkin } from "./unlocks.js";
+import { loadSettings, applySettings } from "./settings.js";
+import { GAME_CONFIG } from "./config.js";
 
 // ─── 输入 ─────────────────────────────────────────────────
 window.addEventListener("resize", resize);
@@ -73,6 +78,10 @@ window.addEventListener("keydown", (e) => {
                 state.gameState = STATE.MENU;
             }
             state.codexFrom = null;
+            return;
+        }
+        if (state.gameState === STATE.SETTINGS) {
+            state.gameState = STATE.MENU;
             return;
         }
         if (state.gameState === STATE.EVENT) {
@@ -180,6 +189,10 @@ canvas.addEventListener("click", (e) => {
                 const sk = skinDef(unlocked[idx]);
                 spawnFloatingText(W / 2, H / 2 - 40, `皮肤: ${sk.name}`, sk.paddle1);
             }
+        } else if (hitMenuSettingsButton(pos.x, pos.y)) {
+            lock();
+            state.codexFrom = "menu";
+            state.gameState = STATE.SETTINGS;
         }
         return;
     }
@@ -261,6 +274,14 @@ canvas.addEventListener("click", (e) => {
         return;
     }
 
+    if (state.gameState === STATE.SETTINGS) {
+        handleSettingsClick(pos.x, pos.y);
+        if (hitSettingsBackButton(pos.x, pos.y)) {
+            state.gameState = STATE.MENU;
+        }
+        return;
+    }
+
     if (state.gameState === STATE.BOSS_CLEAR) {
         if (hitBossClearButton(pos.x, pos.y)) {
             lock();
@@ -288,6 +309,9 @@ canvas.addEventListener("click", (e) => {
 
 // ─── 初始化 ───────────────────────────────────────────────
 function init() {
+    // 应用持久化设置
+    const s = loadSettings();
+    applySettings(s, GAME_CONFIG);
     initStars();
     resetPlayer();
     resetPaddle();

@@ -7,6 +7,8 @@ import { CURSES, HEAVY_CURSES, CURSES_MAP } from "./curses.js";
 import { EVENTS } from "./events.js";
 import { loadSaveData } from "./game.js";
 import { getHighScore, skinDef, getUnlocks, isRewardUnlocked, setSkin, getSelectedSkin, SKIN_START_SKILLS } from "./unlocks.js";
+import { loadSettings, saveSettings, applySettings } from "./settings.js";
+import { GAME_CONFIG } from "./config.js";
 
 // 图鉴状态
 let codexTab = 0; // 0=奖励 1=诅咒 2=事件
@@ -90,11 +92,12 @@ export function hitPenaltyCard(x, y) {
     return -1;
 }
 
-let menuCodexBtn = null, pauseCodexBtn = null, menuSkinBtn = null, gameOverExitBtn = null;
+let menuCodexBtn = null, pauseCodexBtn = null, menuSkinBtn = null, menuSettingsBtn = null, gameOverExitBtn = null;
 let codexTabBtns = [], codexNextBtn = null, codexPrevBtn = null;
 
 export function hitMenuCodexButton(x, y) { return inRect(x, y, menuCodexBtn); }
 export function hitMenuSkinButton(x, y) { return inRect(x, y, menuSkinBtn); }
+export function hitMenuSettingsButton(x, y) { return inRect(x, y, menuSettingsBtn); }
 export function hitPauseCodexButton(x, y) { return inRect(x, y, pauseCodexBtn); }
 export function hitCodexTab(x, y) {
     for (let i = 0; i < codexTabBtns.length; i++) {
@@ -369,6 +372,22 @@ export function drawMenu() {
         ctx.fillText(`🎨 皮肤：${curSkin.name}`, W / 2, sky + 23);
         menuSkinBtn = { x: skx, y: sky, w: skw, h: skh };
     }
+
+    // 设置按钮
+    const stw = 120;
+    const sth = 34;
+    const stx = W / 2 - stw / 2;
+    const sty = sky + skh + 10;
+    ctx.fillStyle = "rgba(60,50,90,0.8)";
+    ctx.strokeStyle = "#9aa1ad";
+    ctx.lineWidth = 1;
+    roundRect(stx, sty, stw, sth, 17);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = COLORS.ui;
+    ctx.font = "13px 'PingFang SC','Microsoft YaHei',sans-serif";
+    ctx.fillText("⚙️ 设置", W / 2, sty + 23);
+    menuSettingsBtn = { x: stx, y: sty, w: stw, h: sth };
 }
 
 // ─── 奖励选择（开局 / 过关 / Boss 掉落共用） ──────────────
@@ -870,7 +889,99 @@ export function drawCodex() {
     ctx.fillText(`第 ${codexPage + 1}/${totalPages} 页 · ESC 返回 · ← → 翻页`, W / 2, 540);
 }
 
-// ─── 惩罚选择（Boss 奖励后强制三选一） ────────────────────
+// ─── 设置界面 ─────────────────────────────────────────────
+let settingsToggleBtns = [];
+export function drawSettingsScreen() {
+    const s = loadSettings();
+    ctx.fillStyle = "rgba(10,8,18,0.92)";
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = COLORS.gold;
+    ctx.font = "bold 28px 'PingFang SC','Microsoft YaHei',sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("⚙️ 设置", W / 2, 48);
+
+    settingsToggleBtns = [];
+    const items = [
+        { label: "音效开关", get: () => s.sound.enabled, set: (v) => { s.sound.enabled = v; saveSettings(s); } },
+        { label: "音量", type: "slider", get: () => s.sound.volume, set: (v) => { s.sound.volume = v; saveSettings(s); } },
+        { label: "震屏", get: () => s.screenShake, set: (v) => { s.screenShake = v; saveSettings(s); } },
+        { label: "击中停顿", get: () => s.hitStop, set: (v) => { s.hitStop = v; saveSettings(s); } },
+        { label: "事件概率", type: "slider", get: () => s.eventChance, set: (v) => { s.eventChance = v; saveSettings(s); } },
+    ];
+    const bw = 400, bh = 36, gap = 8;
+    const bx = W / 2 - bw / 2;
+    let by = 100;
+    for (const item of items) {
+        ctx.fillStyle = "rgba(30,25,50,0.7)";
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = COLORS.ui;
+        ctx.font = "bold 14px 'PingFang SC','Microsoft YaHei',sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(item.label, bx + 12, by + 24);
+        if (item.type === "slider") {
+            const val = item.get();
+            const sw = 120;
+            const sx = bx + bw - sw - 12;
+            ctx.fillStyle = "rgba(80,60,100,0.8)";
+            ctx.fillRect(sx, by + 8, sw, 20);
+            ctx.fillStyle = COLORS.gold;
+            ctx.fillRect(sx, by + 8, sw * val, 20);
+            ctx.fillStyle = "#fff";
+            ctx.font = "11px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(`${Math.round(val * 100)}%`, sx + sw / 2, by + 22);
+            settingsToggleBtns.push({ x: sx, y: by, w: sw, h: bh, type: "slider", item });
+        } else {
+            const val = item.get();
+            const tw = 60;
+            const tx = bx + bw - tw - 12;
+            ctx.fillStyle = val ? "rgba(60,180,80,0.8)" : "rgba(80,60,60,0.8)";
+            ctx.fillRect(tx, by + 6, tw, 24);
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(val ? "开" : "关", tx + tw / 2, by + 22);
+            settingsToggleBtns.push({ x: tx, y: by, w: tw, h: bh, type: "toggle", item });
+        }
+        by += bh + gap;
+    }
+
+    // 返回按钮
+    const bbw = 120, bbh = 34, bbx = W / 2 - bbw / 2, bby = by + 30;
+    ctx.fillStyle = "rgba(60,50,90,0.8)";
+    ctx.strokeStyle = "#9aa1ad";
+    ctx.lineWidth = 1;
+    roundRect(bbx, bby, bbw, bbh, 17);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = COLORS.ui;
+    ctx.font = "13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("返回", bbx + bbw / 2, bby + 23);
+    settingsBackBtn = { x: bbx, y: bby, w: bbw, h: bbh };
+}
+
+let settingsBackBtn = null;
+export function hitSettingsBackButton(x, y) { return inRect(x, y, settingsBackBtn); }
+
+export function handleSettingsClick(x, y) {
+    const s = loadSettings();
+    for (const btn of settingsToggleBtns) {
+        if (!inRect(x, y, btn)) continue;
+        if (btn.type === "toggle") {
+            btn.item.set(!btn.item.get());
+        } else if (btn.type === "slider") {
+            const relX = (x - btn.x) / btn.w;
+            const newVal = Math.max(0.05, Math.min(1, relX));
+            btn.item.set(newVal);
+        }
+        // 应用设置到 GAME_CONFIG
+        applySettings(s, GAME_CONFIG);
+        return;
+    }
+}
+
 export function drawPenaltyScreen() {
     ctx.fillStyle = "rgba(20,6,10,0.85)";
     ctx.fillRect(0, 0, W, H);

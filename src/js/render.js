@@ -16,6 +16,7 @@ import {
     drawBossClear,
     drawPauseScreen,
     drawPenaltyScreen,
+    drawSettingsScreen,
     drawCodex,
     drawGameOver,
     drawVictory,
@@ -209,6 +210,7 @@ export function render() {
     if (state.gameState === STATE.PENALTY) drawPenaltyScreen();
     if (state.gameState === STATE.PAUSED) drawPauseScreen();
     if (state.gameState === STATE.CODEX) drawCodex();
+    if (state.gameState === STATE.SETTINGS) drawSettingsScreen();
     if (state.gameState === STATE.GAME_OVER) drawGameOver();
     if (state.gameState === STATE.VICTORY) drawVictory();
 

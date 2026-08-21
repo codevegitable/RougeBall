@@ -7,6 +7,6 @@ export const GAME_CONFIG = {
     screenShake: true, // 击碎方块时的震屏
     hitStop: true, // 击碎方块时的顿帧
     event: {
-        chance: 0.3, // 通过关卡后进入事件房的概率
+        chance: 0.20, // 通过关卡后进入事件房的概率
     },
 };
