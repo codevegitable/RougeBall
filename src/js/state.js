@@ -1,5 +1,6 @@
 import { STATE, W } from "./constants.js";
 import { playGameOver } from "./sound.js";
+import { registerScore } from "./unlocks.js";
 
 // 全局共享的可变游戏状态
 export const state = {
@@ -32,14 +33,30 @@ export const state = {
     eventResult: null, // 事件结果面板内容 {text, color}
     pendingChallenge: false, // 事件选择了限时挑战
     challenge: null, // 限时挑战数据 {limit, target, initialBreakable}
+    penaltyChoices: [], // 惩罚选择（诅咒 3 选 1）
+    penaltyStrength: 0, // 惩罚强度（随层数）
+    bossRewardPhase: false, // 当前奖励选择是否为 Boss 专属奖励阶段
+    uiLockUntil: 0, // 点击防抖时间戳
     time: 0, // 全局帧计数
+    dt: 1, // 本帧相对 60fps 的时间倍率（帧率无关物理）
+    lastTs: 0,
+    codexFrom: null, // 图鉴入口记录（"menu" / "pause"）
 };
 
-// ─── 记分（含分数倍率） ───────────────────────────────────
+// ─── 记分（含分数倍率 + 解锁进度） ───────────────────────
 export function addScore(n) {
     if (!state.player) return;
     const mul = state.player.scoreMul || 1;
-    state.player.score += Math.round(n * mul);
+    const added = Math.round(n * mul);
+    state.player.score += added;
+    const tier = registerScore(added);
+    if (tier >= 0) {
+        const names = ["悲叹", "狂怒", "终焉"];
+        state.floatingTexts.push({
+            x: 400, y: 200, text: `解锁 tier ${tier + 1}：${names[tier]}`,
+            color: "#ffd700", life: 1, vy: -0.8,
+        });
+    }
 }
 
 // ─── 扣血（含死亡判定） ───────────────────────────────────

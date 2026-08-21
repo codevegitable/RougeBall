@@ -14,6 +14,7 @@ import { state, addScore, loseLife } from "./state.js";
 import { createBlocksFromGrid, generateLevel } from "./levels.js";
 import {
     getRewardChoices,
+    getBossRewardChoices,
     applyReward,
     replaceSkill,
     recalcStats,
@@ -21,6 +22,7 @@ import {
     useSkillFromGame,
     restoreTimeScale,
     currentSpeedScale,
+    REWARD_MAP,
 } from "./rewards.js";
 import { updatePaddle, updateBalls, updateEnemies } from "./physics.js";
 import { createBoss, updateBoss } from "./boss.js";
@@ -30,6 +32,8 @@ import { updateStars } from "./stars.js";
 import { spawnFloatingText } from "./fx.js";
 import { playLaunch, playLevelComplete, playEventOpen, playVictory } from "./sound.js";
 import { RARITY } from "./constants.js";
+import { applyCurseStack, CURSES_MAP, CURSES } from "./curses.js";
+import { getSelectedSkin, skinDef, SKIN_START_SKILLS } from "./unlocks.js";
 
 // ─── 存档 ─────────────────────────────────────────────────
 const SAVE_KEY = "bounceRoguelikeSave";
@@ -45,6 +49,7 @@ export function saveProgress(extra = {}) {
                 lives: p.lives,
                 perks: p.perks,
                 skills: p.skills.map((s) => s.id),
+                curses: p.curses || [],
                 ...extra,
             })
         );
@@ -103,6 +108,8 @@ export function resetPlayer() {
         slowTill: 0,
         rewardBoost: null,
         breakCount: 0,
+        siphonTimer: 0,
+        _wealthTimer: 0,
     };
     recalcStats();
 }
@@ -155,6 +162,16 @@ export function loadLevel(num) {
 // ─── 流程：开局 ───────────────────────────────────────────
 export function startGameRun() {
     resetPlayer();
+    // 给予皮肤开场技能（从 REWARD_MAP 中查找）
+    const skinIdx = getSelectedSkin();
+    const sDef = skinDef(skinIdx);
+    if (sDef && sDef.skill) {
+        const skillDef = REWARD_MAP[sDef.skill];
+        if (skillDef) {
+            // 直接推送技能到槽位，不走 applyReward（避免 recalc 干扰）
+            state.player.skills.push({ id: skillDef.id, cd: 0 });
+        }
+    }
     state.gameState = STATE.START_REWARD;
     state.rewardTitle = "选择你的开局奖励";
     state.rareOnly = false;
@@ -180,6 +197,7 @@ export function continueFromSave() {
     p.lives = s.lives ?? 3;
     p.perks = s.perks || {};
     p.skills = (s.skills || []).map((id) => ({ id, cd: 0 }));
+    p.curses = s.curses || [];
     recalcStats();
     // 退出时正停留在事件房：回到刚遇到该事件的时候
     if (s.atEvent) {
@@ -218,24 +236,30 @@ export function clearLevel() {
     saveProgress();
 }
 
-// Boss 击破后的结算（必掉稀有奖励）→ BOSS_CLEAR 点击进入
+// Boss 击破后的结算（必掉 Boss 专属奖励）→ BOSS_CLEAR 点击进入
 export function bossRewardScreen() {
-    state.player.level++; // Boss 关已通过，进入下一关号
-    state.rewardTitle = `第 ${state.player.level - 1} 关 Boss 击破！稀有奖励掉落`;
+    state.player.level++;
+    state.rewardTitle = `第 ${state.player.level - 1} 关 Boss 击破！专属奖励`;
     state.rareOnly = true;
-    state.levelChoices = getRewardChoices(3 + state.player.extraChoices, true);
+    state.bossRewardPhase = true;
+    state.levelChoices = getBossRewardChoices(3 + state.player.extraChoices);
     state.gameState = STATE.LEVEL_REWARD;
     saveProgress();
 }
 
 export function handleRewardPick(def) {
-    if (def.type === "skill" && state.player.skills.length >= MAX_SKILLS) {
+    const effectiveMax = Math.max(1, MAX_SKILLS - (state.player.curseSkillSlotPenalty || 0));
+    if (def.type === "skill" && state.player.skills.length >= effectiveMax) {
         state.pendingSkillDef = def;
         state.gameState = STATE.SKILL_SWAP;
         return;
     }
     applyReward(def);
-    finalizeRewardStage();
+    proceedAfterReward();
+}
+
+export function skipReward() {
+    proceedAfterReward();
 }
 
 export function cancelSkillSwap() {
@@ -251,7 +275,39 @@ export function confirmSkillSwap(oldIndex) {
     }
     replaceSkill(oldIndex, def);
     state.pendingSkillDef = null;
+    proceedAfterReward();
+}
+
+// 奖励阶段结束：Boss 阶段进入惩罚选择，否则进入 Boss/事件/下一关
+function proceedAfterReward() {
+    if (state.bossRewardPhase) {
+        state.bossRewardPhase = false;
+        setupPenalty();
+        return;
+    }
     finalizeRewardStage();
+}
+
+// 惩罚选择（中文诅咒三选一）
+function setupPenalty() {
+    const lv = state.player.level;
+    const shuffled = [...CURSES].sort(() => Math.random() - 0.5);
+    state.penaltyChoices = shuffled.slice(0, 3);
+    state.penaltyStrength = 1 + Math.floor((lv - 1) * 0.15);
+    state.gameState = STATE.PENALTY;
+    spawnFloatingText(400, 200, "选择一项惩罚", "#ff8080");
+}
+
+export function confirmPenaltyPick(index) {
+    const c = state.penaltyChoices[index];
+    if (!c) return false;
+    applyCurseStack(c.id, state.penaltyStrength, state.player);
+    recalcStats();
+    const used = state.penaltyStrength;
+    state.penaltyChoices = [];
+    spawnFloatingText(400, 260, `获得惩罚：${c.icon} ${c.name} ×${used}`, "#ff8080");
+    finalizeRewardStage();
+    return true;
 }
 
 // 奖励阶段结束：进入 Boss / 事件房 / 下一关
@@ -284,6 +340,9 @@ export function startBossFight() {
     state.challenge = null;
     resetPaddle();
     resetBall();
+    if (state.player.startBalls > 1) {
+        spawnExtraBalls(state.player.startBalls - 1);
+    }
     state.gameState = STATE.PLAYING;
     if (state.player.entryBonus > 0) addScore(state.player.entryBonus);
     playEventOpen();
@@ -399,6 +458,11 @@ export function pauseQuitToMenu() {
     state.gameState = STATE.MENU;
 }
 
+export function quitToMenu() {
+    saveProgress();
+    state.gameState = STATE.MENU;
+}
+
 // ─── 发射未发射的球 ───────────────────────────────────────
 export function launchBalls() {
     let launchedAny = false;
@@ -419,8 +483,12 @@ export function tryUseSkill(index) {
 }
 
 // ─── 主循环逻辑更新 ───────────────────────────────────────
-export function update() {
+export function update(ts = 0) {
     if (state.gameState !== STATE.PLAYING) return;
+    // 帧率无关 dt
+    if (state.lastTs === 0) state.lastTs = ts;
+    state.dt = Math.min(3, Math.max(0.05, (ts - state.lastTs) / 16.6667));
+    state.lastTs = ts;
     state.time++;
 
     tickTimers();
@@ -443,6 +511,11 @@ export function update() {
     // 帧内死亡/胜利 → 清除存档
     if (state.gameState === STATE.GAME_OVER || state.gameState === STATE.VICTORY) {
         clearProgressSave();
+        return;
+    }
+
+    // Boss 刚被击破：进入 BOSS_CLEAR 结算（不可再走普通清关流程）
+    if (state.gameState === STATE.BOSS_CLEAR) {
         return;
     }
 
@@ -499,6 +572,13 @@ function tickTimers() {
     p.freezeTimer = Math.max(0, p.freezeTimer - 1);
     state.invulnTimer = Math.max(0, state.invulnTimer - 1);
     state.hurtTimer = Math.max(0, state.hurtTimer - 1);
+    // 皮肤技能：黄金祝福时效
+    if (p._wealthTimer > 0) {
+        p._wealthTimer--;
+        if (p._wealthTimer <= 0) { p.scoreMul = Math.max(1, p.scoreMul / 2); }
+    }
+    // 吸吮技能时效
+    if (p.siphonTimer > 0) p.siphonTimer = Math.max(0, p.siphonTimer - 1);
     for (const s of p.skills) {
         s.cd = Math.max(0, s.cd - 1);
     }

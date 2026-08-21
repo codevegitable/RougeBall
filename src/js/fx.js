@@ -41,11 +41,13 @@ export function flashPaddle() {
 
 // 冲击波圆环
 export function spawnRing(x, y, color) {
+    if (state.rings.length >= 30) return;
     state.rings.push({ x, y, r: 6, life: 1, color });
 }
 
 // 漂浮文字（得分、提示等）
 export function spawnFloatingText(x, y, text, color = "#ffd700") {
+    if (state.floatingTexts.length >= 20) return;
     state.floatingTexts.push({ x, y, text, color, life: 1, vy: -1.4 });
 }
 

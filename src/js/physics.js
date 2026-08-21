@@ -1,4 +1,4 @@
-import { W, H, COLORS, MAX_BALLS } from "./constants.js";
+import { W, H, COLORS, MAX_BALLS, BALL_BASE_SPEED, PADDLE_BASE_W, BALL_BLOCK_ACCEL, BALL_SPEED_CAP } from "./constants.js";
 import { state, addScore, loseLife } from "./state.js";
 import { spawnParticles } from "./particles.js";
 import { screenShake, hitStop, flashPaddle, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
@@ -15,19 +15,31 @@ import {
     playHeal,
 } from "./sound.js";
 
+// 挡板实际受击区域（加宽翼不参与弹幕受击）
+export function paddleHitRect() {
+    const p = state.paddle;
+    const base = PADDLE_BASE_W * (1 + state.player.paddleBonus) * (1 + (state.player.curseHitPenalty || 0));
+    const extra = p.width - base;
+    return { x: p.x + extra / 2, w: base, y: p.y, h: p.height };
+}
+
 export function updatePaddle() {
     const targetX = state.mouseX - state.paddle.width / 2;
     state.paddle.x += (targetX - state.paddle.x) * 0.3;
-    state.paddle.x = Math.max(0, Math.min(W - state.paddle.width, state.paddle.x));
+    // 夹持：以 base 宽度为边界，加宽翼可超出屏幕
+    const base = PADDLE_BASE_W * (1 + state.player.paddleBonus);
+    const wing = (state.paddle.width - base) / 2;
+    state.paddle.x = Math.max(-wing, Math.min(W - base - wing, state.paddle.x));
 }
 
 // ─── 移动 / 攻击方块的更新与敌弹 ──────────────────────────
 export function updateEnemies() {
-    if (state.player.freezeTimer > 0) return; // 时间冻结
+    if (state.player.freezeTimer > 0) return;
+    const dt = state.dt;
 
     for (const bl of state.blocks) {
         if (bl.moving) {
-            bl.moving.phase += bl.moving.speed;
+            bl.moving.phase += bl.moving.speed * dt;
             bl.x = Math.max(2, Math.min(W - bl.w - 2, bl.baseX + Math.sin(bl.moving.phase) * bl.moving.amp));
         }
         if (bl.shooter) {
@@ -56,18 +68,19 @@ export function updateEnemies() {
     if (bullets.length > 100) bullets.splice(0, bullets.length - 100);
     for (let i = bullets.length - 1; i >= 0; i--) {
         const bu = bullets[i];
-        bu.x += bu.vx;
-        bu.y += bu.vy;
+        bu.x += bu.vx * dt;
+        bu.y += bu.vy * dt;
         if (bu.x < -30 || bu.x > W + 30 || bu.y < -30 || bu.y > H + 30) {
             bullets.splice(i, 1);
             continue;
         }
         const p = state.paddle;
+        const hr = paddleHitRect();
         if (
-            bu.x + bu.r >= p.x &&
-            bu.x - bu.r <= p.x + p.width &&
-            bu.y + bu.r >= p.y &&
-            bu.y - bu.r <= p.y + p.height
+            bu.x + bu.r >= hr.x &&
+            bu.x - bu.r <= hr.x + hr.w &&
+            bu.y + bu.r >= hr.y &&
+            bu.y - bu.r <= hr.y + hr.h
         ) {
             bullets.splice(i, 1);
             enemyPaddleHit(bu);
@@ -144,10 +157,16 @@ function postBreakHooks(cx, cy, bl) {
     const p = state.player;
     const breaks = p.perks;
 
-    // 吸血
+    // 吸血之触
     if (p.healChance > 0 && Math.random() < p.healChance) {
         p.lives += 1;
         spawnFloatingText(cx, cy - 20, "生命 +1", "#7dff9b");
+        playHeal();
+    }
+    // 血之吸吮技能
+    if (p.siphonTimer > 0) {
+        p.lives += 0.3;
+        spawnFloatingText(cx, cy - 20, "生命 +0.3", "#ff8080");
         playHeal();
     }
     // 回音击：弹片伤及随机邻块
@@ -198,6 +217,7 @@ export function updateBalls() {
     const blocks = state.blocks;
     const paddle = state.paddle;
     const p = state.player;
+    const dt = state.dt;
 
     for (let i = balls.length - 1; i >= 0; i--) {
         const b = balls[i];
@@ -208,6 +228,7 @@ export function updateBalls() {
             t.life -= 0.06;
             return t.life > 0;
         });
+        if (b.trail.length > 14) b.trail.splice(0, b.trail.length - 14);
 
         if (!b.launched) {
             b.x = paddle.x + paddle.width / 2;
@@ -215,8 +236,8 @@ export function updateBalls() {
             continue;
         }
 
-        b.x += b.vx;
-        b.y += b.vy;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
 
         // Wall collisions
         if (b.x - b.radius <= 0) {
@@ -270,6 +291,8 @@ export function updateBalls() {
             const hitPos = (b.x - paddle.x) / paddle.width;
             const clampedPos = Math.max(0.05, Math.min(0.95, hitPos));
             const angle = (1 - clampedPos) * Math.PI * 0.7 + Math.PI * 0.15;
+            // 接球时重置速度为基准（抹掉累计加速）
+            b.speed = BALL_BASE_SPEED * p.ballSpeedMul;
             b.vx = Math.cos(angle) * b.speed;
             b.vy = -Math.abs(Math.sin(angle) * b.speed);
             b.piercingLeft = p.maxPiercing;
@@ -326,7 +349,6 @@ export function updateBalls() {
                 if (!ghost) bounceSide(b, bl);
                 spawnParticles(b.x, b.y, "#556080", 3);
                 playBlockHit();
-                onBallHits(b, bl.x + bl.w / 2);
                 break;
             }
 
@@ -336,6 +358,18 @@ export function updateBalls() {
             const dmg = p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
             bl.hp -= dmg;
 
+            // 撞击方块时球加速
+            const cap = BALL_BASE_SPEED * p.ballSpeedMul * BALL_SPEED_CAP;
+            if (b.speed < cap) {
+                b.speed = Math.min(cap, b.speed * (1 + BALL_BLOCK_ACCEL));
+                const spd = Math.hypot(b.vx, b.vy);
+                if (spd > 0.01) {
+                    const ratio = b.speed / spd;
+                    b.vx *= ratio;
+                    b.vy *= ratio;
+                }
+            }
+
             if (bl.hp <= 0) {
                 const ci = Math.min(bl.maxHp - 1, 3);
                 const col = COLORS.blockColors[ci];
@@ -343,7 +377,7 @@ export function updateBalls() {
                 const cy = bl.y + bl.h / 2;
                 spawnParticles(cx, cy, col, 10 + bl.maxHp * 3);
                 spawnRing(cx, cy, COLORS.blockGlow[ci]);
-                spawnFloatingText(cx, cy - 6, `+${bl.maxHp * 100}`);
+                spawnFloatingText(cx, cy - 6, `+${bl.maxHp * 10}`);
                 screenShake(5, 100);
                 hitStop(2);
                 playBlockBreak();
@@ -379,6 +413,7 @@ export function updateBalls() {
                 }
                 spawnParticles(b.x, b.y, "#ffffff", 3);
                 playBlockHit();
+                onBallHits(b, bl.x + bl.w / 2);
             }
             break;
         }

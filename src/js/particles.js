@@ -2,7 +2,9 @@ import { state } from "./state.js";
 import { ctx } from "./canvas.js";
 
 export function spawnParticles(x, y, color, count = 10) {
-    for (let i = 0; i < count; i++) {
+    const MAX_PARTICLES = 200;
+    const actual = Math.min(count, MAX_PARTICLES - state.particles.length);
+    for (let i = 0; i < actual; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = Math.random() * 3 + 1;
         state.particles.push({

@@ -3,10 +3,12 @@ import { state, addScore, loseLife } from "./state.js";
 import { REWARDS, applyReward } from "./rewards.js";
 import { spawnFloatingText } from "./fx.js";
 import { playHeal, playEventGood, playEventBad } from "./sound.js";
+import { rollCurse, applyCurseStack, rollHeavyCurse, applyHeavyCurse } from "./curses.js";
 
 function filterPool(rarity) {
     const p = state.player;
     const pool = REWARDS.filter((r) => {
+        if (r.bossOnly) return false; // Boss 专属不进事件池
         if (r.type === "skill") {
             if (p.skills.length >= MAX_SKILLS) return false;
             return !p.skills.some((s) => s.id === r.id);
@@ -105,7 +107,7 @@ export const EVENTS = [
         id: "gamble",
         name: "命运赌局",
         icon: "🎲",
-        desc: "与命运对赌：\n50% 概率获得一个随机罕见奖励，50% 概率失去 1 条生命。",
+        desc: "与命运对赌：\n50% 概率获得一个随机罕见奖励，50% 概率获得一个随机诅咒。",
         skippable: true,
         choices: [
             {
@@ -116,9 +118,10 @@ export const EVENTS = [
                         playEventGood();
                         return { text: `赢了！获得罕见奖励：\n${describeReward(def)}`, color: "#5aa7ff" };
                     }
-                    loseLife(1);
+                    const curse = rollCurse();
+                    applyCurseStack(curse.id, 1, state.player);
                     playEventBad();
-                    return { text: "输了……失去了 1 条生命", color: "#ff8080" };
+                    return { text: `输了……获得诅咒：${curse.icon} ${curse.name}`, color: "#ff8080" };
                 },
             },
             {
@@ -371,6 +374,32 @@ export const EVENTS = [
                         color: c,
                     };
                 },
+            },
+        ],
+    },
+    {
+        id: "sealed_room",
+        name: "封印之间",
+        icon: "🔐",
+        desc: "密室中封存着危险的力量：\n获得一个稀有奖励，但也会得到一个随机重诅咒。\n（重诅咒不会随关卡推进解除）",
+        skippable: true,
+        choices: [
+            {
+                label: "打开封印",
+                apply() {
+                    const def = grantEventReward(RARITY.RARE);
+                    const hc = rollHeavyCurse();
+                    applyHeavyCurse(hc.id, state.player);
+                    playEventGood();
+                    return {
+                        text: `获得稀有奖励：${describeReward(def)}\n获得重诅咒：${hc.icon} ${hc.name}：${hc.desc()}`,
+                        color: "#e0b84f",
+                    };
+                },
+            },
+            {
+                label: "离开",
+                apply() { playEventBad(); return { text: LEAVE_TEXT, color: "#8892b0" }; },
             },
         ],
     },

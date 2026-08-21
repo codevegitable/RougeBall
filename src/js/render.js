@@ -1,7 +1,8 @@
-import { W, H, COLORS, STATE } from "./constants.js";
+import { W, H, COLORS, STATE, PADDLE_BASE_W } from "./constants.js";
 import { state } from "./state.js";
 import { ctx } from "./canvas.js";
 import { roundRect, shadeColor } from "./utils.js";
+import { skinDef, getSelectedSkin, DEFAULT_SKIN_COLORS } from "./unlocks.js";
 import { drawStars } from "./stars.js";
 import { drawParticles } from "./particles.js";
 import { drawEffects, drawHurtOverlay } from "./fx.js";
@@ -14,12 +15,19 @@ import {
     drawEventScreen,
     drawBossClear,
     drawPauseScreen,
+    drawPenaltyScreen,
+    drawCodex,
     drawGameOver,
     drawVictory,
 } from "./ui.js";
 
 export function drawPaddle() {
     if (!state.paddle) return;
+    // 获取皮肤颜色
+    const sk = skinDef(getSelectedSkin()) || DEFAULT_SKIN_COLORS;
+    const p1 = sk.paddle1;
+    const p2 = sk.paddle2;
+    const glowColor = sk.glow || "rgba(192,96,160,0.55)";
     ctx.save();
     // 受击无敌闪烁
     if (state.invulnTimer > 0 && Math.floor(state.invulnTimer / 6) % 2 === 0) {
@@ -27,18 +35,28 @@ export function drawPaddle() {
     }
 
     const grad = ctx.createLinearGradient(state.paddle.x, state.paddle.y, state.paddle.x, state.paddle.y + state.paddle.height);
-    grad.addColorStop(0, COLORS.paddle1);
-    grad.addColorStop(1, COLORS.paddle2);
+    grad.addColorStop(0, p1);
+    grad.addColorStop(1, p2);
     ctx.fillStyle = grad;
     roundRect(state.paddle.x, state.paddle.y, state.paddle.width, state.paddle.height, 7);
     ctx.fill();
 
     // Glow
-    ctx.shadowColor = "rgba(154,134,232,0.55)";
+    ctx.shadowColor = glowColor;
     ctx.shadowBlur = 15;
     roundRect(state.paddle.x, state.paddle.y, state.paddle.width, state.paddle.height, 7);
     ctx.fill();
     ctx.shadowBlur = 0;
+
+    // 受击区域（base 宽度）强调线
+    const baseW = PADDLE_BASE_W * (1 + state.player.paddleBonus) * (1 + (state.player.curseHitPenalty || 0));
+    const baseX = state.paddle.x + (state.paddle.width - baseW) / 2;
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    roundRect(baseX, state.paddle.y, baseW, state.paddle.height, 7);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
     // Hit flash
     if (state.paddle.flash > 0.02) {
@@ -153,6 +171,9 @@ export function render() {
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, W, H);
 
+    // 爱丽丝仙境装饰背景
+    drawWonderlandDecor();
+
     // 震屏：整个世界轻微位移
     ctx.save();
     if (state.shakeTime > 0) {
@@ -185,7 +206,9 @@ export function render() {
     if (state.gameState === STATE.SKILL_SWAP) drawSkillSwap();
     if (state.gameState === STATE.EVENT) drawEventScreen();
     if (state.gameState === STATE.BOSS_CLEAR) drawBossClear();
+    if (state.gameState === STATE.PENALTY) drawPenaltyScreen();
     if (state.gameState === STATE.PAUSED) drawPauseScreen();
+    if (state.gameState === STATE.CODEX) drawCodex();
     if (state.gameState === STATE.GAME_OVER) drawGameOver();
     if (state.gameState === STATE.VICTORY) drawVictory();
 
@@ -204,4 +227,19 @@ function drawVignette() {
     g.addColorStop(1, "rgba(8,4,16,0.52)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+}
+
+function drawWonderlandDecor() {
+    ctx.save();
+    ctx.globalAlpha = 0.04;
+    const suits = ["♠", "♥", "♣", "♦"];
+    for (let i = 0; i < 12; i++) {
+        const x = (i % 4) * 200 + 40 + (i * 37) % 100;
+        const y = (i * 77) % 600;
+        ctx.font = `${22 + (i % 3) * 14}px serif`;
+        ctx.fillStyle = i % 2 === 0 ? "#e8c84a" : "#c060a0";
+        ctx.textAlign = "center";
+        ctx.fillText(suits[i % 4], x, y);
+    }
+    ctx.restore();
 }

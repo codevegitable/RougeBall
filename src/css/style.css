@@ -5,7 +5,7 @@
 }
 
 body {
-    background: #0d0a12;
+    background: #0d0520;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -19,5 +19,5 @@ body {
 
 canvas {
     border-radius: 8px;
-    box-shadow: 0 0 40px rgba(180, 150, 80, 0.12);
+    box-shadow: 0 0 40px rgba(232, 200, 74, 0.12);
 }
