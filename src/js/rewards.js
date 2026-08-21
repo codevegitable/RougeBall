@@ -53,11 +53,16 @@ function isAvailable(r) {
 }
 
 // ─── 选卡逻辑 ─────────────────────────────────────────────
-function rollRarity() {
+function rollRarity(level = 1) {
     const p = state.player;
-    let commonW = 60;
-    let uncommonW = 30;
-    let rareW = 10 + (p ? stackCount("compass") * 10 : 0);
+    // 随关卡提升降低稀有度
+    const levelPenalty = Math.min(12, Math.floor((level - 1) / 2));
+    // 随 Boss 击败次数降低奖励质量（最后一层约 1/3）
+    const bossDefeated = p.bossDefeated || 0;
+    const bossPenalty = bossDefeated * 8;
+    let commonW = 60 + levelPenalty * 3 + bossPenalty;
+    let uncommonW = 30 - levelPenalty - bossPenalty * 0.5;
+    let rareW = 10 + (p ? stackCount("compass") * 10 : 0) + (p.luckyBonus || 0) - levelPenalty * 0.5 - bossPenalty * 0.5;
     rareW = Math.max(0, rareW - (p.curseRarePenalty || 0));
     if (p.rewardBoost === RARITY.UNCOMMON) { uncommonW += commonW; commonW = 0; }
     const total = commonW + uncommonW + rareW;
@@ -99,13 +104,13 @@ export function getRewardChoices(count, rareOnly = false) {
     const used = new Set();
     const result = [];
     const p = state.player;
-    // 霉运诅咒：选卡减少
+    const level = p.level || 1;
     const penalty = p.curseLuckPenalty || 0;
     count = Math.max(1, count - penalty);
     for (let i = 0; i < count; i++) {
-        const rarity = rareOnly ? RARITY.RARE : rollRarity();
+        const rarity = rareOnly ? RARITY.RARE : rollRarity(level);
         let pick = pickOfRarity(rarity, used);
-        if (!pick) pick = pickOfRarity(rareOnly ? RARITY.RARE : rollRarity(), used);
+        if (!pick) pick = pickOfRarity(rareOnly ? RARITY.RARE : rollRarity(level), used);
         if (!pick) continue;
         used.add(pick.id);
         result.push(pick);
@@ -133,9 +138,12 @@ export function replaceSkill(oldIndex, newDef) {
 export function recalcStats() {
     const p = state.player;
     const n = (id) => p.perks[id] || 0;
-    p.ballDamage = 1 + n("power_ball") + n("mega_ball") * 2 + n("annihil_ball") * 3;
-    p.ballSpeedMul = Math.pow(0.88, n("slow_ball"));
-    p.paddleBonus = n("wider_paddle") * 0.25 + n("giant_paddle") * 0.5;
+    // 奖励缩放：随 Boss 击败次数降低效果（最后一层约 1/3）
+    const bossDefeated = p.bossDefeated || 0;
+    const rewardScale = Math.max(0.33, 1 - bossDefeated * 0.12);
+    p.ballDamage = 1 + Math.round((n("power_ball") + n("mega_ball") * 2 + n("annihil_ball") * 3 + n("double_strike")) * rewardScale);
+    p.ballSpeedMul = Math.pow(0.88, n("slow_ball")) * Math.pow(1.05, n("double_strike"));
+    p.paddleBonus = (n("wider_paddle") * 0.25 + n("giant_paddle") * 0.5) * rewardScale;
     p.scoreMul = Math.pow(2, n("gold_soul"));
     p.healChance = 0.05 * n("vampire") + 0.08 * n("vampiric_gem");
     p.bossResist = n("iron_will") > 0 ? 0.5 : 0;
@@ -143,6 +151,11 @@ export function recalcStats() {
     p.maxPiercing = n("piercing");
     p.extraChoices = n("lucky");
     p.skillCdMul = Math.pow(0.8, n("cd_reduction")) * Math.pow(0.85, n("rapid_cooling"));
+    // 新增奖励
+    p.moveSpeedMul = 1 + 0.15 * n("swift_move");
+    p.lifeSiphon = n("life_siphon") > 0 ? 0.3 * n("life_siphon") : 0;
+    p.luckyBonus = 5 * n("lucky_charm");
+    p.bounceShield = n("bounce_shield") > 0 ? 0.15 : 0;
     p.startBalls = 1 + n("dual_ball") + n("blessed_start") * 2;
     p.ballRadiusMul = 1 + 0.3 * n("giant_orb") + 0.6 * n("titan_ball");
     p.lifesaverLeft = n("lifebuoy") > 0 ? 1 : 0;
@@ -150,12 +163,12 @@ export function recalcStats() {
     p.sparkScore = 30 * n("spark_core");
     p.greedScore = 0.5 * n("greed_eye");
     p.titanDmgMul = n("titan_ball") > 0 ? 1.3 : 1;
-    // Boss 专属奖励
-    p.paddleBonus += 0.5 * n("titan_arm");
-    p.ballDamage += 4 * n("doom_blast");
+    // Boss 专属奖励（也受 rewardScale 影响）
+    p.paddleBonus += 0.5 * n("titan_arm") * rewardScale;
+    p.ballDamage += Math.round(4 * n("doom_blast") * rewardScale);
     p.skillCdMul *= Math.pow(0.7, n("time_weaver"));
     p.ballSpeedMul *= Math.pow(0.85, n("godseed"));
-    p.ballDamage += 1 * n("godseed");
+    p.ballDamage += Math.round(1 * n("godseed") * rewardScale);
     p.scoreMul *= Math.pow(1.2, n("treasury"));
 
     // 诅咒影响
@@ -177,10 +190,15 @@ export function recalcStats() {
     p.curseMaxBallsPenalty = 0;
     p.cursePiercePenalty = 0;
     p.curseBallSizeMul = 1;
-    p.curseEventBonus = 0;
+    p.curseEventReduce = 0;
     p.curseFallDamage = 0;
     p.curseSkillSlotPenalty = 0;
     p.curseBulletExtraDmg = 0;
+    p.curseSecondDmgPenalty = 0;
+    p.curseFog = 0;
+    p.curseDecel = 0;
+    p.curseChoicePenalty = 0;
+    p.curseExtraHitDmg = 0;
 
     if (p.curses) {
         for (const c of p.curses) {
@@ -191,7 +209,7 @@ export function recalcStats() {
 
     // 应用诅咒数值到最终属性
     p.ballSpeedMul *= p.curseSpeedMul;
-    p.ballDamage = Math.max(1, p.ballDamage - p.curseDmgPenalty);
+    p.ballDamage = Math.max(1, p.ballDamage - p.curseDmgPenalty - p.curseSecondDmgPenalty);
     p.scoreMul *= p.curseScoreMul;
     p.skillCdMul *= p.curseCdMul;
     p.paddleBonus = Math.max(-0.5, p.paddleBonus - p.curseShrinkPaddle);
@@ -217,7 +235,7 @@ export function useSkillFromGame(index) {
         return;
     }
     def.use();
-    s.cd = Math.round(def.cooldown * 60 * state.player.skillCdMul);
+    s.cd = Math.round(def.cooldown * 60 * state.player.skillCdMul * (state.player.altarCdP || 1));
     // 弹幕领主：释放技能时额外发射 3 个球
     if (state.player.perks.danmaku_lord) spawnExtraBalls(3);
     playSkillUse();

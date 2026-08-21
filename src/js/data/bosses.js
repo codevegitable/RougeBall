@@ -1,23 +1,72 @@
 // ═══ Boss 数据（纯数据） ═══
-// 每层 2 个候选，弹幕风格各异
-// patterns: fan扇形 / ring环形 / split分裂 / wave波浪 / homing追踪 / spiral螺旋
+// bossType: executor近战导师 / mother腐化母体 / hive机械蜂巢 / priest诅咒司祭
+// skills: 可用技能池（冲锋/跳砸/召唤/大招）
+// patterns: 弹幕模式（辅助威胁）
 
 export const BOSS_CANDIDATES = {
     15: [
-        { name: "晶核守卫", color: "#5aa7ff", hp: 80, bulletSpeed: 1.6, patterns: ["fan", "ring"] },
-        { name: "回旋机兵", color: "#57d39a", hp: 85, bulletSpeed: 1.4, patterns: ["spiral", "fan"] },
+        {
+            name: "铁壁执行者", color: "#5aa7ff", hp: 100, bulletSpeed: 1.8,
+            bossType: "executor", tier: 0,
+            skills: ["charge", "slam"],
+            patterns: ["fan", "ring"],
+            desc: "近战冲撞型，正面减伤，诱导撞墙后输出",
+        },
+        {
+            name: "回旋机兵", color: "#57d39a", hp: 105, bulletSpeed: 1.6,
+            bossType: "executor", tier: 0,
+            skills: ["charge", "slam"],
+            patterns: ["spiral", "fan"],
+            desc: "近战冲撞型，正面减伤，诱导撞墙后输出",
+        },
     ],
     30: [
-        { name: "双生魔像", color: "#b26bff", hp: 180, bulletSpeed: 1.8, patterns: ["fan", "split", "ring"] },
-        { name: "暗影追猎", color: "#e05a5a", hp: 190, bulletSpeed: 1.7, patterns: ["homing", "wave"] },
+        {
+            name: "腐化母体", color: "#b26bff", hp: 220, bulletSpeed: 2.0,
+            bossType: "mother", tier: 1,
+            skills: ["summon", "slam"],
+            patterns: ["ring", "split"],
+            desc: "召唤腐化植物，治疗花与毒花并存",
+        },
+        {
+            name: "剧毒核心", color: "#e05a5a", hp: 230, bulletSpeed: 1.9,
+            bossType: "mother", tier: 1,
+            skills: ["summon", "slam"],
+            patterns: ["wave", "ring"],
+            desc: "召唤腐化植物，治疗花与毒花并存",
+        },
     ],
     45: [
-        { name: "深渊领主", color: "#ff5a8c", hp: 380, bulletSpeed: 2.0, patterns: ["fan", "split", "wave"] },
-        { name: "混沌核心", color: "#e8a33d", hp: 400, bulletSpeed: 1.9, patterns: ["spiral", "ring", "homing"] },
+        {
+            name: "机械蜂巢", color: "#ff5a8c", hp: 460, bulletSpeed: 2.2,
+            bossType: "hive", tier: 2,
+            skills: ["summon", "slam", "charge"],
+            patterns: ["fan", "split"],
+            desc: "部署无人机：修复/护盾/自爆",
+        },
+        {
+            name: "蜂群母舰", color: "#e8a33d", hp: 480, bulletSpeed: 2.1,
+            bossType: "hive", tier: 2,
+            skills: ["summon", "slam", "charge"],
+            patterns: ["spiral", "homing"],
+            desc: "部署无人机：修复/护盾/自爆",
+        },
     ],
     50: [
-        { name: "终焉之心", color: "#ff3333", hp: 680, bulletSpeed: 2.1, patterns: ["fan", "split", "homing"] },
-        { name: "虚空主宰", color: "#8f5fe8", hp: 720, bulletSpeed: 2.0, patterns: ["spiral", "wave", "split"] },
+        {
+            name: "诅咒司祭", color: "#ff3333", hp: 820, bulletSpeed: 2.4,
+            bossType: "priest", tier: 3,
+            skills: ["altar", "slam", "charge"],
+            patterns: ["fan", "homing", "split"],
+            desc: "召唤诅咒祭坛，摧毁祭坛解除诅咒",
+        },
+        {
+            name: "虚空司祭", color: "#8f5fe8", hp: 860, bulletSpeed: 2.3,
+            bossType: "priest", tier: 3,
+            skills: ["altar", "slam", "charge"],
+            patterns: ["spiral", "wave", "ring"],
+            desc: "召唤诅咒祭坛，摧毁祭坛解除诅咒",
+        },
     ],
 };
 

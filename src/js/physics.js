@@ -15,19 +15,21 @@ import {
     playHeal,
 } from "./sound.js";
 
-// 挡板实际受击区域（加宽翼不参与弹幕受击）
+// 挡板实际受击区域（加宽翼不参与弹幕受击，受击长度固定为 PADDLE_BASE_W + 诅咒惩罚）
 export function paddleHitRect() {
     const p = state.paddle;
-    const base = PADDLE_BASE_W * (1 + state.player.paddleBonus) * (1 + (state.player.curseHitPenalty || 0));
+    const base = PADDLE_BASE_W * (1 + (state.player.curseHitPenalty || 0));
     const extra = p.width - base;
     return { x: p.x + extra / 2, w: base, y: p.y, h: p.height };
 }
 
 export function updatePaddle() {
     const targetX = state.mouseX - state.paddle.width / 2;
-    state.paddle.x += (targetX - state.paddle.x) * 0.3;
-    // 夹持：以 base 宽度为边界，加宽翼可超出屏幕
-    const base = PADDLE_BASE_W * (1 + state.player.paddleBonus);
+    const moveSpeed = state.player.moveSpeedMul || 1;
+    const lerpFactor = 0.3 * moveSpeed * (1 - (state.player.curseMoveResist || 0));
+    state.paddle.x += (targetX - state.paddle.x) * Math.min(1, lerpFactor);
+    // 夹持：以未加宽的原始宽度为边界，奖励加宽翼可伸出屏幕
+    const base = PADDLE_BASE_W;
     const wing = (state.paddle.width - base) / 2;
     state.paddle.x = Math.max(-wing, Math.min(W - base - wing, state.paddle.x));
 }
@@ -97,6 +99,11 @@ function enemyPaddleHit(bullet) {
         return;
     }
     if (state.invulnTimer > 0) return;
+    if (pl.bounceShield > 0 && Math.random() < pl.bounceShield) {
+        spawnRing(bullet.x, bullet.y, "rgba(255,220,100,0.9)");
+        playWallHit();
+        return;
+    }
     if (Math.random() < pl.bossResist) {
         spawnFloatingText(state.paddle.x + state.paddle.width / 2, state.paddle.y - 24, "格挡！", "#7dff9b");
         playWallHit();
@@ -169,6 +176,16 @@ function postBreakHooks(cx, cy, bl) {
         spawnFloatingText(cx, cy - 20, "生命 +0.3", "#ff8080");
         playHeal();
     }
+    // 生命虹吸：每击碎 5 个方块回复
+    if (p.lifeSiphon > 0) {
+        p._siphonCounter = (p._siphonCounter || 0) + 1;
+        if (p._siphonCounter >= 5) {
+            p._siphonCounter = 0;
+            p.lives += p.lifeSiphon;
+            spawnFloatingText(cx, cy - 20, `生命 +${p.lifeSiphon}`, "#7dff9b");
+            playHeal();
+        }
+    }
     // 回音击：弹片伤及随机邻块
     const echoN = breaks.echo_hit || 0;
     for (let e = 0; e < echoN; e++) {
@@ -236,8 +253,10 @@ export function updateBalls() {
             continue;
         }
 
-        b.x += b.vx * dt;
-        b.y += b.vy * dt;
+        // 祭坛诅咒：球速 +10%
+        const speedMul = (p.altarSpeedP || 1) * dt;
+        b.x += b.vx * speedMul;
+        b.y += b.vy * speedMul;
 
         // Wall collisions
         if (b.x - b.radius <= 0) {
@@ -302,6 +321,39 @@ export function updateBalls() {
             playPaddleHit();
         }
 
+        // Boss 治疗单位碰撞
+        if (state.boss) {
+            for (const minion of state.boss.minions) {
+                const dx = b.x - minion.x;
+                const dy = b.y - minion.y;
+                const dist = Math.hypot(dx, dy);
+                const rr = minion.r + b.radius;
+                if (dist >= rr || dist <= 0.001) continue;
+                const nx = dx / dist;
+                const ny = dy / dist;
+                b.x = minion.x + nx * (rr + 1);
+                b.y = minion.y + ny * (rr + 1);
+                const dot = b.vx * nx + b.vy * ny;
+                if (dot < 0) {
+                    b.vx -= 2 * dot * nx;
+                    b.vy -= 2 * dot * ny;
+                }
+                minion.hp -= p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
+                minion.flash = 1;
+                spawnParticles(b.x, b.y, "#7dff9b", 4);
+                if (minion.hp <= 0) {
+                    spawnParticles(minion.x, minion.y, "#7dff9b", 12);
+                    const idx = state.boss.minions.indexOf(minion);
+                    if (idx >= 0) state.boss.minions.splice(idx, 1);
+                    if (state.boss) {
+                        state.boss.hp -= 10;
+                        state.boss.flash = 1;
+                        spawnFloatingText(state.boss.x, state.boss.y - 40, "召唤物死亡反噬！", "#ff4444");
+                    }
+                }
+            }
+        }
+
         // Boss collision
         if (state.boss) {
             const bo = state.boss;
@@ -319,9 +371,52 @@ export function updateBalls() {
                     b.vx -= 2 * dot * nx;
                     b.vy -= 2 * dot * ny;
                 }
-                damageBoss(p.ballDamage * (p.strikeTimer > 0 ? 2 : 1));
+                let bdmg = p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
+                // 铁壁执行者：正面减伤（球从下方打正面），背面增伤（球从上方打背）
+                if (bo.bossType === "executor") {
+                    if (ny > 0.3) {
+                        bdmg = Math.max(1, Math.round(bdmg * 0.5));
+                        spawnFloatingText(bo.x, bo.y - bo.r - 26, "正面!", "#8899bb");
+                    } else if (ny < -0.3) {
+                        bdmg = Math.round(bdmg * 1.5);
+                        spawnFloatingText(bo.x, bo.y - bo.r - 26, "背击!", "#ffd700");
+                    }
+                }
+                // 祭坛诅咒：伤害 -1
+                if (p.altarDmgP) bdmg = Math.max(1, bdmg - 1);
+                damageBoss(bdmg);
                 spawnRing(b.x, b.y, "rgba(255,120,80,0.85)");
                 spawnParticles(b.x, b.y, "#ff8866", 8);
+            }
+
+            // 祭坛碰撞（球可摧毁祭坛）
+            if (bo.altars && bo.altars.length > 0) {
+                for (let k = bo.altars.length - 1; k >= 0; k--) {
+                    const al = bo.altars[k];
+                    const adx = b.x - al.x;
+                    const ady = b.y - al.y;
+                    const adist = Math.hypot(adx, ady);
+                    const arr = al.r + b.radius;
+                    if (adist < arr && adist > 0.001) {
+                        const anx = adx / adist;
+                        const any = ady / adist;
+                        b.x = al.x + anx * (arr + 1);
+                        b.y = al.y + any * (arr + 1);
+                        const adot = b.vx * anx + b.vy * any;
+                        if (adot < 0) {
+                            b.vx -= 2 * adot * anx;
+                            b.vy -= 2 * adot * any;
+                        }
+                        al.hp -= p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
+                        al.flash = 1;
+                        spawnParticles(b.x, b.y, "#cc66ff", 4);
+                        if (al.hp <= 0) {
+                            spawnParticles(al.x, al.y, "#cc66ff", 15);
+                            bo.altars.splice(k, 1);
+                            spawnFloatingText(al.x, al.y - 20, "祭坛摧毁！", "#cc66ff");
+                        }
+                    }
+                }
             }
         }
 

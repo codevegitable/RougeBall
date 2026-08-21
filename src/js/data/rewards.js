@@ -56,6 +56,12 @@ export const REWARD_DATA = [
     { id: "meteor", name: "末路追踪", icon: "☄️", rarity: "rare", type: "ability", maxStacks: 1, desc: "每击碎 8 个方块，自动对场上血量最高的方块造成 3 点伤害" },
     { id: "lucky", name: "幸运女神", icon: "🍀", rarity: "rare", type: "ability", maxStacks: 1, desc: "奖励选择数量 +1（局外收益）" },
     { id: "compass", name: "寻宝罗盘", icon: "🧭", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "奖励稀有度概率提高 10%（局外收益）" },
+    // ═══ 新增奖励 ═══
+    { id: "bounce_shield", name: "弹射护盾", icon: "🛡️", rarity: "uncommon", type: "ability", maxStacks: 1, desc: "被弹幕击中时 15% 概率反弹子弹" },
+    { id: "swift_move", name: "疾风步", icon: "💨", rarity: "common", type: "bonus", maxStacks: 3, desc: "挡板响应速度 +15%" },
+    { id: "life_siphon", name: "生命虹吸", icon: "🩸", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "每击碎 5 个方块回复 0.3 命" },
+    { id: "double_strike", name: "双倍打击", icon: "⚡", rarity: "common", type: "bonus", maxStacks: 3, desc: "球伤害 +1，球速度 +5%" },
+    { id: "lucky_charm", name: "幸运护符", icon: "🍀", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "稀有奖励概率 +5%" },
     // ═══ 解锁奖励 ═══
     { id: "guardian_core", name: "守护核心", icon: "🛡️", rarity: "rare", type: "ability", maxStacks: 1, tierLock: 0, desc: "每关开始获得 2 秒能量护盾" },
     { id: "greed_eye", name: "贪婪之眼", icon: "👁️", rarity: "uncommon", type: "ability", maxStacks: 2, tierLock: 0, desc: "击碎方块额外获得 +50% 分数" },

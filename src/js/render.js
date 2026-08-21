@@ -6,16 +6,16 @@ import { skinDef, getSelectedSkin, DEFAULT_SKIN_COLORS } from "./unlocks.js";
 import { drawStars } from "./stars.js";
 import { drawParticles } from "./particles.js";
 import { drawEffects, drawHurtOverlay } from "./fx.js";
-import { drawBoss, drawBossBar, drawBossBullets, drawEnemyBullets } from "./boss.js";
+import { drawBoss, drawBossBar, drawBossBullets, drawBossDangerZones, drawEnemyBullets } from "./boss.js";
 import {
     drawUI,
     drawMenu,
     drawRewardScreen,
     drawSkillSwap,
+    drawCurseScreen,
     drawEventScreen,
     drawBossClear,
     drawPauseScreen,
-    drawPenaltyScreen,
     drawSettingsScreen,
     drawCodex,
     drawGameOver,
@@ -49,15 +49,18 @@ export function drawPaddle() {
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // 受击区域（base 宽度）强调线
-    const baseW = PADDLE_BASE_W * (1 + state.player.paddleBonus) * (1 + (state.player.curseHitPenalty || 0));
+    // 受击区域（固定 PADDLE_BASE_W + 诅咒惩罚）强调发光
+    const baseW = PADDLE_BASE_W * (1 + (state.player.curseHitPenalty || 0));
     const baseX = state.paddle.x + (state.paddle.width - baseW) / 2;
-    ctx.strokeStyle = "rgba(255,255,255,0.15)";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 4]);
+    ctx.shadowColor = "rgba(255,220,100,0.6)";
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = "rgba(255,220,100,0.5)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
     roundRect(baseX, state.paddle.y, baseW, state.paddle.height, 7);
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
 
     // Hit flash
     if (state.paddle.flash > 0.02) {
@@ -197,6 +200,7 @@ export function render() {
     drawBalls();
     drawParticles();
     drawBossBullets();
+    drawBossDangerZones();
     drawEnemyBullets();
     drawUI();
     if (state.boss) drawBossBar();
@@ -207,7 +211,7 @@ export function render() {
     if (state.gameState === STATE.SKILL_SWAP) drawSkillSwap();
     if (state.gameState === STATE.EVENT) drawEventScreen();
     if (state.gameState === STATE.BOSS_CLEAR) drawBossClear();
-    if (state.gameState === STATE.PENALTY) drawPenaltyScreen();
+    if (state.gameState === STATE.CURSE_SELECT) drawCurseScreen();
     if (state.gameState === STATE.PAUSED) drawPauseScreen();
     if (state.gameState === STATE.CODEX) drawCodex();
     if (state.gameState === STATE.SETTINGS) drawSettingsScreen();

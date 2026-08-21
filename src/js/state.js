@@ -21,6 +21,7 @@ export const state = {
     // Boss 与敌弹
     boss: null,
     bossBullets: [],
+    bossDangerZones: [], // 地面危险区 {x,y,r,life,type}
     enemyBullets: [],
     invulnTimer: 0, // 受击无敌帧
     hurtTimer: 0, // 受击红闪帧
@@ -33,9 +34,9 @@ export const state = {
     eventResult: null, // 事件结果面板内容 {text, color}
     pendingChallenge: false, // 事件选择了限时挑战
     challenge: null, // 限时挑战数据 {limit, target, initialBreakable}
-    penaltyChoices: [], // 惩罚选择（诅咒 3 选 1）
-    penaltyStrength: 0, // 惩罚强度（随层数）
-    bossRewardPhase: false, // 当前奖励选择是否为 Boss 专属奖励阶段
+    curseChoices: [], // 诅咒三选一列表
+    curseStrength: 0, // 诅咒强度
+    pendingBossCurse: false, // 待选择 Boss 诅咒
     uiLockUntil: 0, // 点击防抖时间戳
     time: 0, // 全局帧计数
     dt: 1, // 本帧相对 60fps 的时间倍率（帧率无关物理）

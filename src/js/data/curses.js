@@ -1,5 +1,5 @@
 // ═══ 诅咒数据（纯数据，无逻辑） ═══
-// tier: "normal"（常规）| "heavy"（重诅咒，仅事件）
+// tier: "normal" / "boss"（仅 Boss 掉落） / "heavy"（仅事件）
 // effectId: 由 curses.js 解释执行
 
 export const CURSE_DATA = [
@@ -21,8 +21,23 @@ export const CURSE_DATA = [
     { id: "overcrowd", name: "拥堵", icon: "🚦", tier: "normal", desc: (n) => `多球上限 -${n}` },
     { id: "ethereal", name: "虚体", icon: "👻", tier: "normal", desc: (n) => `穿透次数 -${n}（至少 0）` },
     { id: "blur", name: "迷眼", icon: "🌀", tier: "normal", desc: (n) => `球体积 -${n * 6}%` },
-    { id: "accident", name: "事故", icon: "⚠️", tier: "normal", desc: (n) => `事件房概率 +${n * 5}%` },
+    { id: "accident", name: "厄运", icon: "⚠️", tier: "normal", desc: (n) => `事件房概率 -${Math.min(n * 8, 8)}%` },
     { id: "slowfall", name: "坠落", icon: "💧", tier: "normal", desc: (n) => `球落地额外扣 ${n * 0.5} 命` },
+    // ═══ 新增诅咒 ═══
+    { id: "weakness", name: "虚弱", icon: "🦴", tier: "normal", desc: (n) => `球伤害额外 -${n}（与锈蚀独立）` },
+    { id: "fog", name: "迷雾", icon: "🌫️", tier: "normal", desc: (n) => `暗角增强，视野缩小` },
+    { id: "decay", name: "震荡", icon: "💢", tier: "normal", desc: (n) => `每次击碎方块球速 -${n}%` },
+    { id: "echo", name: "诅咒回响", icon: "🔊", tier: "normal", desc: (n) => `诅咒可选项 -${n} 项` },
+    { id: "thorn", name: "荆棘", icon: "🌵", tier: "normal", desc: (n) => `受击时额外扣 ${n * 0.5} 命` },
+];
+
+export const BOSS_CURSE_DATA = [
+    { id: "void_mark", name: "虚空印记", icon: "☠️", tier: "boss", desc: () => "被弹幕击中额外 -1 命" },
+    { id: "chaos_grasp", name: "混沌引力", icon: "🌀", tier: "boss", desc: () => "球速 +20%，更难控制" },
+    { id: "time_warp", name: "时间扭曲", icon: "⏰", tier: "boss", desc: () => "技能冷却 +30%" },
+    { id: "shadow_clone", name: "暗影分身", icon: "👥", tier: "boss", desc: () => "受击面积 +30%" },
+    { id: "void_rift", name: "虚空裂隙", icon: "🕳️", tier: "boss", desc: () => "球落地额外扣 0.5 命" },
+    { id: "fate_seal", name: "命运封印", icon: "🔮", tier: "boss", forced: true, desc: () => "诅咒选择时仅 1 项可选，且无法跳过" },
 ];
 
 export const HEAVY_CURSE_DATA = [

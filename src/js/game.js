@@ -8,6 +8,8 @@ import {
     BALL_RADIUS,
     MAX_SKILLS,
     GRID_COLS,
+    PADDLE_BASE_W,
+    PADDLE_H,
 } from "./constants.js";
 import { GAME_CONFIG } from "./config.js";
 import { state, addScore, loseLife } from "./state.js";
@@ -32,7 +34,7 @@ import { updateStars } from "./stars.js";
 import { spawnFloatingText } from "./fx.js";
 import { playLaunch, playLevelComplete, playEventOpen, playVictory } from "./sound.js";
 import { RARITY } from "./constants.js";
-import { applyCurseStack, CURSES_MAP, CURSES } from "./curses.js";
+import { rollCurse, rollBossCurse, rollCursePool, applyCurseStack, CURSES_MAP, CURSES, BOSS_CURSES } from "./curses.js";
 import { getSelectedSkin, skinDef, SKIN_START_SKILLS } from "./unlocks.js";
 
 // ─── 存档 ─────────────────────────────────────────────────
@@ -77,6 +79,8 @@ export function clearProgressSave() {
 
 // ─── 初始化 / 重置 ────────────────────────────────────────
 export function resetPlayer() {
+    // 重置 Boss Rush 状态（防止秘籍残留导致普通模式提前通关）
+    state._bossRush = undefined;
     state.player = {
         lives: 3,
         score: 0,
@@ -108,6 +112,7 @@ export function resetPlayer() {
         slowTill: 0,
         rewardBoost: null,
         breakCount: 0,
+        bossDefeated: 0,
         siphonTimer: 0,
         _wealthTimer: 0,
     };
@@ -115,8 +120,8 @@ export function resetPlayer() {
 }
 
 export function resetPaddle() {
-    const baseW = Math.min(320, 110 * (1 + state.player.paddleBonus));
-    state.paddle = { x: W / 2 - baseW / 2, y: H - 40, width: baseW, height: 14, baseWidth: baseW, flash: 0 };
+    const baseW = Math.min(320, PADDLE_BASE_W * (1 + state.player.paddleBonus));
+    state.paddle = { x: W / 2 - baseW / 2, y: H - 40, width: baseW, height: PADDLE_H, baseWidth: PADDLE_BASE_W, flash: 0 };
 }
 
 export function resetBall() {
@@ -137,7 +142,7 @@ export function resetBall() {
     ];
 }
 
-export function loadLevel(num) {
+export function loadLevel(num, skipCurse = false) {
     if (state.player.entryBonus > 0) addScore(state.player.entryBonus);
     const grid = generateLevel(num);
     state.blocks = createBlocksFromGrid(grid, num);
@@ -211,7 +216,7 @@ export function continueFromSave() {
     if (isBossLevel(p.level)) {
         startBossFight();
     } else {
-        loadLevel(p.level);
+        loadLevel(p.level, true);
     }
     state.gameState = STATE.PLAYING;
 }
@@ -236,12 +241,14 @@ export function clearLevel() {
     saveProgress();
 }
 
-// Boss 击破后的结算（必掉 Boss 专属奖励）→ BOSS_CLEAR 点击进入
+// Boss 击破后的结算（必掉 Boss 专属奖励 + 获得 Boss 诅咒）
 export function bossRewardScreen() {
     state.player.level++;
+    state.player.bossDefeated = (state.player.bossDefeated || 0) + 1;
+    // Boss 诅咒待选（不自动应用，留给后续三选一界面）
+    state.pendingBossCurse = true;
     state.rewardTitle = `第 ${state.player.level - 1} 关 Boss 击破！专属奖励`;
     state.rareOnly = true;
-    state.bossRewardPhase = true;
     state.levelChoices = getBossRewardChoices(3 + state.player.extraChoices);
     state.gameState = STATE.LEVEL_REWARD;
     saveProgress();
@@ -255,11 +262,11 @@ export function handleRewardPick(def) {
         return;
     }
     applyReward(def);
-    proceedAfterReward();
+    finalizeRewardStage();
 }
 
 export function skipReward() {
-    proceedAfterReward();
+    finalizeRewardStage();
 }
 
 export function cancelSkillSwap() {
@@ -275,50 +282,30 @@ export function confirmSkillSwap(oldIndex) {
     }
     replaceSkill(oldIndex, def);
     state.pendingSkillDef = null;
-    proceedAfterReward();
-}
-
-// 奖励阶段结束：Boss 阶段进入惩罚选择，否则进入 Boss/事件/下一关
-function proceedAfterReward() {
-    if (state.bossRewardPhase) {
-        state.bossRewardPhase = false;
-        setupPenalty();
-        return;
-    }
     finalizeRewardStage();
-}
-
-// 惩罚选择（中文诅咒三选一）
-function setupPenalty() {
-    const lv = state.player.level;
-    const shuffled = [...CURSES].sort(() => Math.random() - 0.5);
-    state.penaltyChoices = shuffled.slice(0, 3);
-    state.penaltyStrength = 1 + Math.floor((lv - 1) * 0.15);
-    state.gameState = STATE.PENALTY;
-    spawnFloatingText(400, 200, "选择一项惩罚", "#ff8080");
-}
-
-export function confirmPenaltyPick(index) {
-    const c = state.penaltyChoices[index];
-    if (!c) return false;
-    applyCurseStack(c.id, state.penaltyStrength, state.player);
-    recalcStats();
-    const used = state.penaltyStrength;
-    state.penaltyChoices = [];
-    spawnFloatingText(400, 260, `获得惩罚：${c.icon} ${c.name} ×${used}`, "#ff8080");
-    finalizeRewardStage();
-    return true;
 }
 
 // 奖励阶段结束：进入 Boss / 事件房 / 下一关
 function finalizeRewardStage() {
-    const next = state.player.level;
-    if (isBossLevel(next)) {
-        startBossFight();
+    const lv = state.player.level;
+    // Boss 诅咒三选一（优先于普通诅咒）
+    if (state.pendingBossCurse) {
+        state.pendingBossCurse = false;
+        setupBossCurseSelect();
         return;
     }
-    // 事件房判定
-    if (Math.random() < GAME_CONFIG.event.chance) {
+    // 普通诅咒：15 关后每 3 关一次
+    const shouldCurse = lv > 15 && lv % 3 === 0;
+    if (shouldCurse) {
+        setupCurseSelect();
+        return;
+    }
+    // 直接进入下一阶段
+    const next = lv;
+    if (isBossLevel(next)) { startBossFight(); return; }
+    // 事件房概率（诅咒「厄运」会降低概率，最低 0%）
+    const eventChance = Math.max(0, GAME_CONFIG.event.chance - (state.player.curseEventReduce || 0));
+    if (Math.random() < eventChance) {
         state.currentEvent = pickEvent();
         state.gameState = STATE.EVENT;
         playEventOpen();
@@ -327,6 +314,84 @@ function finalizeRewardStage() {
     }
     loadLevel(next);
     state.gameState = STATE.PLAYING;
+}
+
+// Boss 诅咒三选一
+function setupBossCurseSelect() {
+    const bossCurses = [...BOSS_CURSES].sort(() => Math.random() - 0.5);
+    const penalty = state.player.curseChoicePenalty || 0;
+    state.curseChoices = bossCurses.slice(0, Math.max(1, 3 - penalty));
+    state.curseStrength = 1;
+    state.gameState = STATE.CURSE_SELECT;
+    spawnFloatingText(400, 200, "选择一项 Boss 诅咒", "#ff44aa");
+}
+
+function setupCurseSelect() {
+    const lv = state.player.level;
+    const pool = rollCursePool(lv);
+    // 排除攻击力已为 1 时的锈蚀诅咒
+    const filtered = pool.filter(c => !(c.id === "rust" && state.player.ballDamage <= 1));
+    let shuffled = [...filtered].sort(() => Math.random() - 0.5);
+    // 检查是否有强制诅咒（命运封印）— 如果有则只显示 1 项
+    const forcedIdx = shuffled.findIndex(c => c.forced);
+    if (forcedIdx >= 0) {
+        const forced = shuffled.splice(forcedIdx, 1)[0];
+        state.curseChoices = [forced];
+    } else {
+        // 诅咒「诅咒回响」减少可选项（最少 1 项）
+        const penalty = state.player.curseChoicePenalty || 0;
+        state.curseChoices = shuffled.slice(0, Math.max(1, 3 - penalty));
+    }
+    state.curseStrength = 1 + Math.floor((lv - 1) * 0.1);
+    state.gameState = STATE.CURSE_SELECT;
+    spawnFloatingText(400, 200, state.curseChoices.length === 1 ? "命运封印！强制诅咒" : "选择一个诅咒", "#ff8080");
+}
+
+export function confirmCursePick(index) {
+    const c = state.curseChoices[index];
+    if (!c) return false;
+    applyCurseStack(c.id, state.curseStrength, state.player);
+    recalcStats();
+    state.curseChoices = [];
+    spawnFloatingText(400, 260, `获得诅咒：${c.icon} ${c.name} ×${state.curseStrength}`, "#ff8080");
+    // Boss Rush 模式（仅当进行中且未打完 4 个 Boss 时）
+    if (typeof state._bossRush === "number" && state._bossRush < 4) {
+        proceedBossRush();
+        return true;
+    }
+    // 进入下一阶段
+    const next = state.player.level;
+    if (isBossLevel(next)) {
+        startBossFight();
+        return true;
+    }
+    // 事件房概率（诅咒「厄运」会降低概率，最低 0%）
+    const eventChance = Math.max(0, GAME_CONFIG.event.chance - (state.player.curseEventReduce || 0));
+    if (Math.random() < eventChance) {
+        state.currentEvent = pickEvent();
+        state.gameState = STATE.EVENT;
+        playEventOpen();
+        spawnFloatingText(400, 260, `事件：${state.currentEvent.name}`, "#ffcc33");
+        return true;
+    }
+    loadLevel(next);
+    state.gameState = STATE.PLAYING;
+    return true;
+}
+
+// Boss Rush 模式：击败当前 Boss 后进入下一 Boss
+export function proceedBossRush() {
+    const bossLevels = [15, 30, 45, 50];
+    const idx = state._bossRush || 0;
+    if (idx >= bossLevels.length) {
+        state.gameState = STATE.VICTORY;
+        playVictory();
+        return;
+    }
+    state.player.level = bossLevels[idx];
+    state._bossRush = idx + 1;
+    startBossFight();
+    spawnFloatingText(400, 200, `Boss Rush ${idx + 1}/4`, "#ff4444");
 }
 
 export function startBossFight() {

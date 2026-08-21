@@ -138,11 +138,11 @@ export function drawUI() {
     ctx.textAlign = "left";
     ctx.fillText(`第 ${p.level} 关`, 20, 33);
 
-    // Lives（支持半条命显示）
+    // Lives（❤️ ×数字）
     const hearts = Math.floor(p.lives);
     const half = p.lives - hearts >= 0.5;
     ctx.fillStyle = COLORS.ui;
-    ctx.fillText("❤️ ".repeat(hearts) + (half ? "💗 " : ""), 140, 33);
+    ctx.fillText(`❤️ ×${hearts}${half ? ".5" : ""}`, 140, 33);
 
     // Score
     ctx.fillStyle = COLORS.ui;
@@ -155,29 +155,33 @@ export function drawUI() {
     ctx.textAlign = "right";
     ctx.fillText("ESC 暂停", W - 12, 24);
 
-    // Active effects indicator
-    let fxY = 62;
+    // Active effects indicator — 右上角
+    let fxY = 56;
     if (state.challenge) {
         const c = state.challenge;
         const breakable = state.blocks.filter((b) => !b.indestructible).length;
         const broke = c.initialBreakable - breakable;
         ctx.fillStyle = "#ffa94d";
-        ctx.font = "bold 13px 'PingFang SC','Microsoft YaHei',sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(`限时挑战：击破 ${Math.min(broke, c.target)}/${c.target} · 剩余 ${Math.ceil(c.limit / 60)} 秒`, W / 2, fxY);
-        fxY += 20;
+        ctx.font = "bold 11px 'PingFang SC','Microsoft YaHei',sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(`限时挑战：击破 ${Math.min(broke, c.target)}/${c.target} · 剩余 ${Math.ceil(c.limit / 60)} 秒`, W - 12, fxY);
+        fxY += 16;
     }
-    // 诅咒显示（中文）
+    // 诅咒显示（中文 + 效果说明）— 右上角
     if (state.player.curses && state.player.curses.length > 0) {
         ctx.fillStyle = "#ff8080";
         ctx.font = "11px 'PingFang SC','Microsoft YaHei',sans-serif";
-        ctx.textAlign = "center";
+        ctx.textAlign = "right";
         const cList = state.player.curses.slice(0, 3).map((c) => {
             const d = CURSES_MAP[c.id];
-            return d ? `${d.icon}${d.name}` : c.id;
+            return d ? `${d.icon}${d.name}(${typeof d.desc === "function" ? d.desc(c.count) : d.desc})` : c.id;
         }).join(" ");
-        ctx.fillText(`诅咒: ${cList}`, W / 2, fxY);
+        ctx.fillText(`诅咒: ${cList}`, W - 12, fxY);
         fxY += 16;
+        if (state.player.curses.length > 3) {
+            ctx.fillText(`...还有 ${state.player.curses.length - 3} 个诅咒`, W - 12, fxY);
+            fxY += 16;
+        }
     }
     const effects = [];
     if (p.ballDamage > 1) effects.push(`伤害+${p.ballDamage - 1}`);
@@ -191,8 +195,8 @@ export function drawUI() {
     for (const eff of effects) {
         ctx.fillStyle = "rgba(255,200,50,0.9)";
         ctx.font = "11px 'PingFang SC','Microsoft YaHei',sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(eff, W / 2, fxY);
+        ctx.textAlign = "right";
+        ctx.fillText(eff, W - 12, fxY);
         fxY += 16;
     }
 
@@ -276,7 +280,7 @@ export function drawMenu() {
         ctx.fillStyle = COLORS.gold;
         ctx.font = "14px 'PingFang SC','Microsoft YaHei',sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(`🏆 最高分: ${Math.floor(hs / 10)}`, W / 2, H / 2 - 130);
+        ctx.fillText(`🏆 最高分: ${Math.floor(hs / 10)}`, W / 2, H / 2 - 155);
     }
 
     ctx.fillStyle = COLORS.uiDim;
@@ -853,7 +857,7 @@ export function drawCodex() {
             ctx.fillStyle = "#ff8080";
             ctx.font = "10px 'PingFang SC','Microsoft YaHei',sans-serif";
             ctx.textAlign = "right";
-            ctx.fillText("未解锁", W - 38, ly + 20);
+            ctx.fillText("未解锁", codexTab === 0 ? W - 38 : W - 38, codexTab === 0 ? ly + 40 : ly + 20);
         }
         ly += lh;
     }
@@ -980,6 +984,76 @@ export function handleSettingsClick(x, y) {
         applySettings(s, GAME_CONFIG);
         return;
     }
+}
+
+// ─── 诅咒选择界面（三选一） ────────────────────────────────
+export function drawCurseScreen() {
+    ctx.fillStyle = "rgba(20,6,10,0.85)";
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = "#ff8080";
+    ctx.font = "bold 30px 'PingFang SC','Microsoft YaHei',sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("选择一个诅咒", W / 2, H / 2 - 165);
+
+    ctx.fillStyle = COLORS.uiDim;
+    ctx.font = "14px 'PingFang SC','Microsoft YaHei',sans-serif";
+    ctx.fillText(`诅咒强度 ×${state.curseStrength} · 永久生效`, W / 2, H / 2 - 125);
+
+    const choices = state.curseChoices;
+    const cardW = 168;
+    const cardH = 232;
+    const gap = 20;
+    const totalW = choices.length * cardW + (choices.length - 1) * gap;
+    const startX = W / 2 - totalW / 2;
+    const cardY = H / 2 - 95;
+
+    curseCards = [];
+    for (let i = 0; i < choices.length; i++) {
+        const c = choices[i];
+        const cx = startX + i * (cardW + gap);
+        ctx.fillStyle = "rgba(40,12,20,0.95)";
+        ctx.strokeStyle = "#ff8080";
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = "rgba(255,80,80,0.4)";
+        ctx.shadowBlur = 12;
+        roundRect(cx, cardY, cardW, cardH, 12);
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = "#ff8080";
+        ctx.font = "bold 12px 'PingFang SC','Microsoft YaHei',sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText("诅咒", cx + cardW - 10, cardY + 24);
+
+        ctx.font = "44px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(c.icon, cx + cardW / 2, cardY + 70);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 17px 'PingFang SC','Microsoft YaHei',sans-serif";
+        ctx.fillText(c.name, cx + cardW / 2, cardY + 100);
+
+        ctx.fillStyle = "#d89090";
+        ctx.font = "12px 'PingFang SC','Microsoft YaHei',sans-serif";
+        ctx.textAlign = "center";
+        wrapText(typeof c.desc === "function" ? c.desc(state.curseStrength) : c.desc, cx + cardW / 2, cardY + 126, cardW - 24, 17);
+
+        ctx.fillStyle = "#ff8080";
+        ctx.font = "bold 12px 'PingFang SC','Microsoft YaHei',sans-serif";
+        ctx.fillText(`强度 ×${state.curseStrength} · 永久`, cx + cardW / 2, cardY + cardH - 14);
+
+        curseCards.push({ x: cx, y: cardY, w: cardW, h: cardH });
+    }
+}
+
+let curseCards = [];
+export function hitCurseCard(x, y) {
+    for (let i = 0; i < curseCards.length; i++) {
+        if (inRect(x, y, curseCards[i])) return i;
+    }
+    return -1;
 }
 
 export function drawPenaltyScreen() {

@@ -9,14 +9,17 @@ import {
     resetPaddle,
     resetBall,
     startGameRun,
+    startBossFight,
+    loadLevel,
+    proceedBossRush,
     continueFromSave,
     handleStartRewardPick,
     handleRewardPick,
     skipReward,
     cancelSkillSwap,
     confirmSkillSwap,
+    confirmCursePick,
     bossRewardScreen,
-    confirmPenaltyPick,
     finishEvent,
     launchBalls,
     tryUseSkill,
@@ -43,6 +46,7 @@ import {
     hitBossClearButton,
     hitGameOverExitButton,
     hitSkipButton,
+    hitCurseCard,
     hitPauseResume,
     hitPauseRestart,
     hitPauseQuit,
@@ -57,12 +61,72 @@ import {
     hitCodexNext,
     hitCodexPrev,
 } from "./ui.js";
-import { initAudio, toggleSound } from "./sound.js";
+import { initAudio, toggleSound, playVictory } from "./sound.js";
 import { spawnFloatingText } from "./fx.js";
 import { setCodexTab, setCodexPage } from "./ui.js";
 import { getUnlocks, setSkin, skinDef, getSelectedSkin } from "./unlocks.js";
 import { loadSettings, applySettings } from "./settings.js";
 import { GAME_CONFIG } from "./config.js";
+import { REWARDS, recalcStats } from "./rewards.js";
+
+// ─── 魂斗罗秘籍检测 ───────────────────────────────────────
+const KONAMI_CODE = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
+let konamiIndex = 0;
+let konamiActive = false;
+
+function checkKonami(e) {
+    const key = e.key;
+    // 忽略大写/小写差异
+    const expected = KONAMI_CODE[konamiIndex];
+    if (key === expected || (expected === "b" && (key === "B" || key === "b")) || (expected === "a" && (key === "A" || key === "a"))) {
+        konamiIndex++;
+        if (konamiIndex >= KONAMI_CODE.length) {
+            konamiIndex = 0;
+            if (!konamiActive) {
+                konamiActive = true;
+                activateKonamiCode();
+            }
+        }
+    } else {
+        konamiIndex = 0;
+    }
+}
+
+function activateKonamiCode() {
+    if (state.gameState !== STATE.PLAYING && state.gameState !== STATE.MENU) return;
+    if (state.gameState === STATE.MENU) {
+        startGameRun();
+    }
+    doKonami();
+}
+
+function doKonami() {
+    const p = state.player;
+    if (!p) return;
+    // 给予所有可获得的奖励
+    const allRewards = REWARDS.filter(r => !r.bossOnly && !r.skinOnly && r.type !== "skill");
+    for (const r of allRewards) {
+        const count = r.maxStacks || 1;
+        p.perks[r.id] = (p.perks[r.id] || 0) + count;
+        if (r.apply) r.apply();
+    }
+    // 技能: 给予所有技能（最多2个）
+    const allSkills = REWARDS.filter(r => r.type === "skill" && !r.skinOnly && !r.bossOnly);
+    for (const s of allSkills.slice(0, 2)) {
+        if (!p.skills.some(sk => sk.id === s.id)) {
+            p.skills.push({ id: s.id, cd: 0 });
+        }
+    }
+    recalcStats();
+    p.lives = 30;
+    p.score = 30000;
+    // 进入 Boss Rush 模式
+    state._bossRush = 0; // 已击败的 Boss 索引
+    spawnFloatingText(400, 200, "🔓 魂斗罗秘籍激活！30 条命 + 全奖励", "#ffd700");
+    spawnFloatingText(400, 240, "Boss Rush 模式启动！", "#ff4444");
+    // 跳转到第一个 Boss
+    proceedBossRush();
+}
 
 // ─── 输入 ─────────────────────────────────────────────────
 window.addEventListener("resize", resize);
@@ -70,6 +134,8 @@ resize();
 
 // 音效开关：按 M 键切换，首次按键时解锁音频；ESC 暂停/退出事件/退出图鉴
 window.addEventListener("keydown", (e) => {
+    // 魂斗罗秘籍检测
+    checkKonami(e);
     if (e.key === "Escape") {
         if (state.gameState === STATE.CODEX) {
             if (state.codexFrom === "pause") {
@@ -93,7 +159,6 @@ window.addEventListener("keydown", (e) => {
             }
             return;
         }
-        if (state.gameState === STATE.PENALTY) return; // 惩罚为强制选择
         togglePause();
         return;
     }
@@ -247,11 +312,11 @@ canvas.addEventListener("click", (e) => {
         return;
     }
 
-    if (state.gameState === STATE.PENALTY) {
-        const idx = hitPenaltyCard(pos.x, pos.y);
+    if (state.gameState === STATE.CURSE_SELECT) {
+        const idx = hitCurseCard(pos.x, pos.y);
         if (idx >= 0) {
             lock();
-            confirmPenaltyPick(idx);
+            confirmCursePick(idx);
         }
         return;
     }
