@@ -2,22 +2,24 @@
 export const W = 800;
 export const H = 600;
 
-// ─── 颜色 ─────────────────────────────────────────────────
+// ─── 颜色（统一引用 palette.js 的受限调色板）─────────────
+import { PAL } from "./palette.js";
+
 export const COLORS = {
-    bg: "#1a0a28",
-    topBar: "rgba(26,10,40,0.85)",
-    paddle1: "#8b3a8b",
-    paddle2: "#c060a0",
-    ball: "#f5f0e0",
-    ballGlow: "rgba(245,240,224,0.35)",
-    blockColors: ["#2a7a5a", "#c07a3a", "#a63d4a", "#6a4fa8"],
-    blockGlow: ["rgba(42,122,90,0.45)", "rgba(192,122,58,0.45)", "rgba(166,61,74,0.45)", "rgba(106,79,168,0.45)"],
-    unbreakable: "#3a2a4a",
-    ui: "#e8d8c8",
-    uiDim: "#a89880",
-    gold: "#e8c84a",
-    cardBg: "rgba(26,15,35,0.96)",
-    cardBorder: "rgba(232,200,74,0.35)",
+    bg: PAL.ink1,
+    topBar: PAL.ink2,
+    paddle1: PAL.vio1,
+    paddle2: PAL.vio2,
+    ball: PAL.bone1,
+    ballGlow: PAL.gold2,
+    blockColors: [PAL.moss2, PAL.ember2, PAL.blood2, PAL.vio2],
+    blockGlow: [PAL.moss3, PAL.ember3, PAL.blood3, PAL.vio3],
+    unbreakable: PAL.stone1,
+    ui: PAL.bone0,
+    uiDim: PAL.mist0,
+    gold: PAL.gold2,
+    cardBg: PAL.ink2,
+    cardBorder: PAL.gold1,
 };
 
 // ─── 游戏状态 ─────────────────────────────────────────────
@@ -46,9 +48,9 @@ export const RARITY = {
 };
 
 export const RARITY_META = {
-    [RARITY.COMMON]: { name: "普通", color: "#a89880", glow: "rgba(168,152,128,0.45)", weight: 60 },
-    [RARITY.UNCOMMON]: { name: "罕见", color: "#6d97d8", glow: "rgba(109,151,216,0.5)", weight: 30 },
-    [RARITY.RARE]: { name: "稀有", color: "#e8c84a", glow: "rgba(232,200,74,0.5)", weight: 10 },
+    [RARITY.COMMON]: { name: "普通", color: PAL.mist0, glow: PAL.mist1, weight: 60 },
+    [RARITY.UNCOMMON]: { name: "罕见", color: PAL.arc2, glow: PAL.arc3, weight: 30 },
+    [RARITY.RARE]: { name: "稀有", color: PAL.gold2, glow: PAL.gold3, weight: 10 },
 };
 
 // ─── 进度配置 ─────────────────────────────────────────────
@@ -62,7 +64,8 @@ export const BLOCK_H = 22;
 export const BLOCK_GAP = 4;
 export const GRID_COLS = 10;
 export const GRID_X = (W - GRID_COLS * (BLOCK_W + BLOCK_GAP) + BLOCK_GAP) / 2;
-export const GRID_Y = 70;
+// 顶栏 48px + 16px 呼吸空间：确保方块不被 HUD 遮挡
+export const GRID_Y = 88;
 
 // ─── 挡板 ─────────────────────────────────────────────────
 export const PADDLE_BASE_W = 110;

@@ -36,6 +36,7 @@ import { playLaunch, playLevelComplete, playEventOpen, playVictory } from "./sou
 import { RARITY } from "./constants.js";
 import { rollCurse, rollBossCurse, rollCursePool, applyCurseStack, CURSES_MAP, CURSES, BOSS_CURSES } from "./curses.js";
 import { getSelectedSkin, skinDef, SKIN_START_SKILLS } from "./unlocks.js";
+import { PAL } from "./palette.js";
 
 // ─── 存档 ─────────────────────────────────────────────────
 const SAVE_KEY = "bounceRoguelikeSave";
@@ -309,7 +310,7 @@ function finalizeRewardStage() {
         state.currentEvent = pickEvent();
         state.gameState = STATE.EVENT;
         playEventOpen();
-        spawnFloatingText(400, 260, `事件：${state.currentEvent.name}`, "#ffcc33");
+        spawnFloatingText(400, 260, `事件：${state.currentEvent.name}`, PAL.gold3);
         return;
     }
     loadLevel(next);
@@ -344,7 +345,7 @@ function setupCurseSelect() {
     }
     state.curseStrength = 1 + Math.floor((lv - 1) * 0.1);
     state.gameState = STATE.CURSE_SELECT;
-    spawnFloatingText(400, 200, state.curseChoices.length === 1 ? "命运封印！强制诅咒" : "选择一个诅咒", "#ff8080");
+    spawnFloatingText(400, 200, state.curseChoices.length === 1 ? "命运封印！强制诅咒" : "选择一个诅咒", PAL.blood3);
 }
 
 export function confirmCursePick(index) {
@@ -353,7 +354,7 @@ export function confirmCursePick(index) {
     applyCurseStack(c.id, state.curseStrength, state.player);
     recalcStats();
     state.curseChoices = [];
-    spawnFloatingText(400, 260, `获得诅咒：${c.icon} ${c.name} ×${state.curseStrength}`, "#ff8080");
+    spawnFloatingText(400, 260, `获得诅咒：${c.icon} ${c.name} ×${state.curseStrength}`, PAL.blood3);
     // Boss Rush 模式（仅当进行中且未打完 4 个 Boss 时）
     if (typeof state._bossRush === "number" && state._bossRush < 4) {
         proceedBossRush();
@@ -371,7 +372,7 @@ export function confirmCursePick(index) {
         state.currentEvent = pickEvent();
         state.gameState = STATE.EVENT;
         playEventOpen();
-        spawnFloatingText(400, 260, `事件：${state.currentEvent.name}`, "#ffcc33");
+        spawnFloatingText(400, 260, `事件：${state.currentEvent.name}`, PAL.gold3);
         return true;
     }
     loadLevel(next);
@@ -391,7 +392,7 @@ export function proceedBossRush() {
     state.player.level = bossLevels[idx];
     state._bossRush = idx + 1;
     startBossFight();
-    spawnFloatingText(400, 200, `Boss Rush ${idx + 1}/4`, "#ff4444");
+    spawnFloatingText(400, 200, `Boss Rush ${idx + 1}/4`, PAL.blood2);
 }
 
 export function startBossFight() {
@@ -458,7 +459,7 @@ export function beginChallengeRun() {
         spawnExtraBalls(state.player.startBalls - 1);
     }
     state.gameState = STATE.PLAYING;
-    spawnFloatingText(400, 300, "限时挑战开始！", "#ffa94d");
+    spawnFloatingText(400, 300, "限时挑战开始！", PAL.ember2);
 }
 
 function buildChallengeGrid(level) {
@@ -488,17 +489,17 @@ function endChallenge(success, broke) {
         const def = grantEventReward(RARITY.UNCOMMON);
         state.eventResult = {
             text: `限时挑战成功！击破 ${broke} 个方块\n获得罕见奖励：${describeReward(def)}`,
-            color: "#7dff9b",
+            color: PAL.moss3,
         };
-        spawnFloatingText(400, 260, "挑战成功！", "#7dff9b");
+        spawnFloatingText(400, 260, "挑战成功！", PAL.moss3);
     } else {
         loseLife(0.5);
         if (state.gameState === STATE.GAME_OVER) return;
         state.eventResult = {
             text: `挑战失败！仅击破 ${broke}/${c.target} 个方块\n损失半条生命`,
-            color: "#ff8080",
+            color: PAL.blood3,
         };
-        spawnFloatingText(400, 260, "挑战失败", "#ff8080");
+        spawnFloatingText(400, 260, "挑战失败", PAL.blood3);
     }
     state.gameState = STATE.EVENT;
     state.currentEvent = null;

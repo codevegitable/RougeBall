@@ -68,6 +68,8 @@ import { getUnlocks, setSkin, skinDef, getSelectedSkin } from "./unlocks.js";
 import { loadSettings, applySettings } from "./settings.js";
 import { GAME_CONFIG } from "./config.js";
 import { REWARDS, recalcStats } from "./rewards.js";
+import { PAL } from "./palette.js";
+import { initPixelMode } from "./pixel.js";
 
 // ─── 魂斗罗秘籍检测 ───────────────────────────────────────
 const KONAMI_CODE = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
@@ -122,8 +124,8 @@ function doKonami() {
     p.score = 30000;
     // 进入 Boss Rush 模式
     state._bossRush = 0; // 已击败的 Boss 索引
-    spawnFloatingText(400, 200, "🔓 魂斗罗秘籍激活！30 条命 + 全奖励", "#ffd700");
-    spawnFloatingText(400, 240, "Boss Rush 模式启动！", "#ff4444");
+    spawnFloatingText(400, 200, "🔓 魂斗罗秘籍激活！30 条命 + 全奖励", PAL.gold3);
+    spawnFloatingText(400, 240, "Boss Rush 模式启动！", PAL.blood2);
     // 跳转到第一个 Boss
     proceedBossRush();
 }
@@ -170,7 +172,7 @@ window.addEventListener("keydown", (e) => {
     if (e.key === "m" || e.key === "M") {
         initAudio();
         const on = toggleSound();
-        spawnFloatingText(W / 2, H / 2 - 60, on ? "音效：开" : "音效：关", on ? "#7dff9b" : "#ff8080");
+        spawnFloatingText(W / 2, H / 2 - 60, on ? "音效：开" : "音效：关", on ? PAL.moss3 : PAL.blood3);
         return;
     }
     if (state.gameState !== STATE.PLAYING) return;
@@ -374,6 +376,8 @@ canvas.addEventListener("click", (e) => {
 
 // ─── 初始化 ───────────────────────────────────────────────
 function init() {
+    // 像素模式：关闭画布平滑，必须在任何绘制前调用
+    initPixelMode();
     // 应用持久化设置
     const s = loadSettings();
     applySettings(s, GAME_CONFIG);

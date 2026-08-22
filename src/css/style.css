@@ -5,19 +5,38 @@
 }
 
 body {
-    background: #0d0520;
+    /* 地牢石壁底色，与画布内的暗部衔接 */
+    background: #0a0810;
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
     overflow: hidden;
-    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-family: 'Silkscreen', 'Zpix', 'PingFang SC', 'Microsoft YaHei', monospace;
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
 }
 
+/* 背景加一层极淡的网格纹理，避免大面积纯色显得空 */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+        linear-gradient(rgba(117, 103, 127, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(117, 103, 127, 0.045) 1px, transparent 1px);
+    background-size: 16px 16px;
+}
+
 canvas {
-    border-radius: 8px;
-    box-shadow: 0 0 40px rgba(232, 200, 74, 0.12);
+    /* 像素风关键：放大时使用最近邻采样，保持硬边不模糊 */
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    /* 不加边框：画布四角正是 HUD（技能槽、生命值、层数）所在位置，
+       粗边框会在视觉上挤压这些信息。只留一层极淡外发光做画面分界。 */
+    box-shadow: 0 0 24px rgba(224, 175, 56, 0.08);
+    position: relative;
 }

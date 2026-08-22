@@ -5,6 +5,7 @@ import { spawnFloatingText } from "./fx.js";
 import { playHeal, playEventGood, playEventBad } from "./sound.js";
 import { rollCurse, applyCurseStack, rollHeavyCurse, applyHeavyCurse } from "./curses.js";
 import { EVENT_DATA } from "./data/events.js";
+import { PAL } from "./palette.js";
 
 function filterPool(rarity) {
     const p = state.player;
@@ -66,12 +67,12 @@ const ACTION_RUNNERS = {
     },
     leave() {
         playEventBad();
-        return { text: LEAVE_TEXT, color: "#8892b0" };
+        return { text: LEAVE_TEXT, color: PAL.stone3 };
     },
     challenge() {
         state.pendingChallenge = true;
         playEventGood();
-        return { text: "挑战即将开始！点击继续进入战斗", color: "#ffa94d" };
+        return { text: "挑战即将开始！点击继续进入战斗", color: PAL.ember2 };
     },
     gamble(a) {
         if (Math.random() < 0.5) {
@@ -82,16 +83,16 @@ const ACTION_RUNNERS = {
         const curse = rollCurse();
         applyCurseStack(curse.id, 1, state.player);
         playEventBad();
-        return { text: `输了……获得诅咒：${curse.icon} ${curse.name}`, color: "#ff8080" };
+        return { text: `输了……获得诅咒：${curse.icon} ${curse.name}`, color: PAL.blood3 };
     },
     heal(a) {
         state.player.lives += a.amount;
         playHeal();
-        return { text: `生命 +${a.amount}，身体重新充满活力`, color: "#7dff9b" };
+        return { text: `生命 +${a.amount}，身体重新充满活力`, color: PAL.moss3 };
     },
     sacrifice(a) {
         if (state.player.lives <= 1) {
-            return { text: "生命不足，无法献祭", color: "#ff8080" };
+            return { text: "生命不足，无法献祭", color: PAL.blood3 };
         }
         loseLife(a.costLives);
         const r1 = grantEventReward(a.rarity);
@@ -106,11 +107,11 @@ const ACTION_RUNNERS = {
         if (Math.random() < 0.6) {
             const def = grantEventReward(null);
             playEventGood();
-            return { text: `获得神秘奖励：\n${describeReward(def)}`, color: "#ffcc33" };
+            return { text: `获得神秘奖励：\n${describeReward(def)}`, color: PAL.gold3 };
         }
         state.player.score = Math.max(0, state.player.score - a.scoreCost);
         playEventBad();
-        return { text: `分数 -${a.scoreCost / 10}（被裂缝吞噬）`, color: "#ff8080" };
+        return { text: `分数 -${a.scoreCost / 10}（被裂缝吞噬）`, color: PAL.blood3 };
     },
     blessing() {
         state.player.rewardBoost = RARITY.UNCOMMON;
@@ -119,17 +120,17 @@ const ACTION_RUNNERS = {
     },
     tradeLife(a) {
         if (state.player.lives <= 1) {
-            return { text: "生命不足，无法交易", color: "#ff8080" };
+            return { text: "生命不足，无法交易", color: PAL.blood3 };
         }
         loseLife(a.costLives);
         const def = grantEventReward(a.rarity);
         playEventGood();
-        return { text: `获得稀有奖励：\n${describeReward(def)}`, color: "#ffcc33" };
+        return { text: `获得稀有奖励：\n${describeReward(def)}`, color: PAL.gold3 };
     },
     score(a) {
         addScore(a.amount);
         playEventGood();
-        return { text: `分数 +${a.amount / 10}，精神焕发`, color: "#ffd700" };
+        return { text: `分数 +${a.amount / 10}，精神焕发`, color: PAL.gold3 };
     },
     rewardNoSkill(a) {
         const def = rollBundleNoSkill(a.rarity);
@@ -163,7 +164,7 @@ const ACTION_RUNNERS = {
         const def = rollBundleAbilityOnly();
         if (def) applyReward(def);
         playEventGood();
-        const c = def ? "#e0b84f" : "#8892b0";
+        const c = def ? "#e0b84f" : PAL.stone3;
         return { text: `领悟了新的能力：\n${describeReward(def)}`, color: c };
     },
     sealedRoom() {
@@ -204,11 +205,11 @@ export function executeEventChoice(index) {
     const choice = ev.choices[index];
     if (!choice) return false;
     if (choice.need && !choice.need()) {
-        state.eventResult = { text: "条件不满足，无法选择", color: "#ff8080" };
+        state.eventResult = { text: "条件不满足，无法选择", color: PAL.blood3 };
         return false;
     }
     const res = choice.apply();
-    state.eventResult = res || { text: "事件结束", color: "#8892b0" };
+    state.eventResult = res || { text: "事件结束", color: PAL.stone3 };
     return true;
 }
 

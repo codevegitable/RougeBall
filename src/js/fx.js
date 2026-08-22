@@ -2,6 +2,9 @@ import { GAME_CONFIG } from "./config.js";
 import { W, H } from "./constants.js";
 import { state } from "./state.js";
 import { ctx } from "./canvas.js";
+import { PAL } from "./palette.js";
+import { PX, pRing, pText, pDitherMask } from "./pixel.js";
+import { FIELD_TOP, SKILL_Y } from "./layout.js";
 
 const FRAME_MS = 1000 / 60;
 const SHAKE_DURATION = 120;
@@ -12,14 +15,24 @@ export function playerHurt() {
     state.hurtTimer = HURT_FRAMES;
 }
 
+// 受击反馈：血色网点带只画在游戏区的左右与下沿，避开顶栏与底栏的 HUD。
+// 之前四边环绕会盖住技能槽和生命值——恰恰是受伤时玩家最需要看清的信息。
 export function drawHurtOverlay() {
     if (state.hurtTimer <= 0) return;
-    const a = (state.hurtTimer / HURT_FRAMES) * 0.38;
-    const grad = ctx.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.75);
-    grad.addColorStop(0, "rgba(255,50,50,0)");
-    grad.addColorStop(1, `rgba(255,40,40,${a.toFixed(3)})`);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
+    const t = state.hurtTimer / HURT_FRAMES;
+    const top = FIELD_TOP;
+    const bottom = SKILL_Y - PX * 2;
+    const bands = 5;
+    for (let i = 0; i < bands; i++) {
+        const inset = i * PX * 3;
+        const d = t * (1 - i / bands) * 0.8;
+        if (d <= 0.02) continue;
+        const bandT = PX * 3;
+        // 左右两侧 + 游戏区下沿；不画上沿（那里是顶栏）
+        pDitherMask(inset, top + inset, bandT, bottom - top - inset * 2, PAL.blood2, d);
+        pDitherMask(W - inset - bandT, top + inset, bandT, bottom - top - inset * 2, PAL.blood2, d);
+        pDitherMask(inset + bandT, bottom - inset - bandT, W - (inset + bandT) * 2, bandT, PAL.blood2, d);
+    }
 }
 
 // 震屏
@@ -77,23 +90,22 @@ export function updateEffects() {
 }
 
 export function drawEffects() {
+    // 冲击环：像素圆环，生命末期变细
     for (const r of state.rings) {
-        ctx.globalAlpha = Math.max(0, r.life);
-        ctx.strokeStyle = r.color;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.globalAlpha = Math.max(0, r.life > 0.3 ? 1 : r.life / 0.3);
+        pRing(r.x, r.y, r.r, r.color, r.life > 0.5 ? 2 : 1);
     }
 
     ctx.globalAlpha = 1;
 
+    // 漂浮文字：像素描边，整数坐标
     for (const t of state.floatingTexts) {
-        ctx.globalAlpha = Math.max(0, Math.min(1, t.life));
-        ctx.fillStyle = t.color;
-        ctx.font = "bold 16px 'PingFang SC','Microsoft YaHei',sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(t.text, t.x, t.y);
+        ctx.globalAlpha = Math.max(0, Math.min(1, t.life > 0.35 ? 1 : t.life / 0.35));
+        pText(t.text, Math.round(t.x / PX) * PX, Math.round(t.y / PX) * PX, t.color, {
+            size: 15,
+            bold: true,
+            align: "center",
+        });
     }
 
     ctx.globalAlpha = 1;

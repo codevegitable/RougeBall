@@ -1,5 +1,6 @@
 import { state } from "./state.js";
 import { ctx } from "./canvas.js";
+import { PX } from "./pixel.js";
 
 export function spawnParticles(x, y, color, count = 10) {
     const MAX_PARTICLES = 200;
@@ -32,10 +33,13 @@ export function updateParticles() {
 }
 
 export function drawParticles() {
+    // 像素碎块：尺寸吸附到 PX 网格，生命末期缩小一档而非淡出成雾
     for (const p of state.particles) {
-        ctx.globalAlpha = p.life;
+        const step = p.life > 0.6 ? 2 : p.life > 0.3 ? 1.5 : 1;
+        const s = Math.max(PX, Math.round((p.size * step) / PX) * PX);
+        ctx.globalAlpha = p.life > 0.25 ? 1 : p.life / 0.25;
         ctx.fillStyle = p.color;
-        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+        ctx.fillRect(Math.round(p.x / PX) * PX, Math.round(p.y / PX) * PX, s, s);
     }
     ctx.globalAlpha = 1;
 }

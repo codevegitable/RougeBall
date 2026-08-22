@@ -5,6 +5,14 @@ import { spawnParticles } from "./particles.js";
 import { screenShake, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
 import { playBossHit, playBossShoot, playBossDeath, playVictory, playPlayerHit, playWallHit } from "./sound.js";
 import { BOSS_CANDIDATES, BOSS_TIER_INDEX } from "./data/bosses.js";
+import { PAL, rgba } from "./palette.js";
+import { PX, pRectRaw, pRing, pBar, pText, pDitherMask, pCircle } from "./pixel.js";
+import { HUD_TOP_H } from "./layout.js";
+import { drawIcon } from "./icons.js";
+import { drawBossSprite, drawBossCrown } from "./boss_art.js";
+
+// 以任意中心绘制像素圆（pCircle 的别名，便于 boss 局部坐标系调用）
+const pCircleAt = (cx, cy, r, color) => pCircle(cx, cy, r, color);
 
 // 挡板受击区域（与 physics.js 同步）
 function bossHitRect() {
@@ -194,8 +202,8 @@ function executeCharge(boss, a, dt) {
 
 function onChargeWallHit(boss) {
     screenShake(12, 200);
-    spawnParticles(boss.x, boss.y, "#ffffff", 20);
-    spawnFloatingText(boss.x, boss.y - 30, "撞墙眩晕！", "#ffd700");
+    spawnParticles(boss.x, boss.y, PAL.bone1, 20);
+    spawnFloatingText(boss.x, boss.y - 30, "撞墙眩晕！", PAL.gold3);
     playWallHit();
 }
 
@@ -204,7 +212,7 @@ function startRecovery(boss, frames) {
     boss.vulnerable = true;
     boss.action = null;
     boss.actionCooldown = 0;
-    spawnFloatingText(boss.x, boss.y - 50, "易伤！", "#ffd700");
+    spawnFloatingText(boss.x, boss.y - 50, "易伤！", PAL.gold3);
 }
 
 // ─── 跳砸 ─────────────────────────────────────────────────
@@ -307,7 +315,7 @@ function spawnMinionForType(boss) {
         roll -= w;
         if (roll <= 0) { picked = kind; break; }
     }
-    const colors = { healer: "#7dff9b", poison: "#b26bff", vine: "#5aa7ff", repair: "#7dff9b", shield: "#ffcc33", bomber: "#ff6644" };
+    const colors = { healer: PAL.moss3, poison: "#b26bff", vine: "#5aa7ff", repair: PAL.moss3, shield: PAL.gold3, bomber: "#ff6644" };
     const bossId = state.boss;
     boss.minions.push({
         x: mx, y: my, r: 14, hp: 20 + boss.tier * 10,
@@ -315,7 +323,7 @@ function spawnMinionForType(boss) {
         healTimer: picked === "healer" || picked === "repair" ? 180 : 0,
         poisonTimer: picked === "poison" ? 120 : 0,
         seekTimer: picked === "bomber" ? 90 : 0,
-        flash: 0, angle: 0, color: colors[picked] || "#ffffff",
+        flash: 0, angle: 0, color: colors[picked] || PAL.bone1,
     });
     spawnFloatingText(mx, my - 20, `召唤：${picked}`, colors[picked]);
 }
@@ -330,7 +338,7 @@ function updateMinions(boss, dt) {
                 m.healTimer = 180;
                 const healAmount = 2 + boss.tier;
                 boss.hp = Math.min(boss.maxHp, boss.hp + healAmount);
-                spawnFloatingText(m.x, m.y - 16, `治疗 +${healAmount}`, "#7dff9b");
+                spawnFloatingText(m.x, m.y - 16, `治疗 +${healAmount}`, PAL.moss3);
             }
         }
         // 腐化花：定期生成毒区
@@ -369,12 +377,12 @@ function updateMinions(boss, dt) {
         }
         // 受击（由 physics.js 处理碰撞）
         if (m.hp <= 0) {
-            spawnParticles(m.x, m.y, m.color || "#7dff9b", 12);
+            spawnParticles(m.x, m.y, m.color || PAL.moss3, 12);
             boss.minions.splice(i, 1);
             // 召唤物死亡削弱 Boss
             boss.hp -= 10;
             boss.flash = 1;
-            spawnFloatingText(boss.x, boss.y - 40, "召唤物死亡反噬！", "#ff4444");
+            spawnFloatingText(boss.x, boss.y - 40, "召唤物死亡反噬！", PAL.blood2);
         }
     }
 }
@@ -401,7 +409,7 @@ function executeAltar(boss, a, dt) {
                     x: ax, y: ay, r: 20, hp: 15 + boss.tier * 8,
                     maxHp: 15 + boss.tier * 8, type: kind, flash: 0,
                 });
-                spawnFloatingText(ax, ay - 20, "诅咒祭坛出现！", "#cc66ff");
+                spawnFloatingText(ax, ay - 20, "诅咒祭坛出现！", PAL.vio2);
                 playBossShoot();
             }
         }
@@ -415,7 +423,7 @@ function executeAltar(boss, a, dt) {
                 const kinds = ["dmg", "speed", "cd"];
                 const kind = kinds[Math.floor(Math.random() * kinds.length)];
                 boss.altars.push({ x: ax, y: ay, r: 20, hp: 15 + boss.tier * 8, maxHp: 15 + boss.tier * 8, type: kind, flash: 0 });
-                spawnFloatingText(ax, ay - 20, "诅咒祭坛出现！", "#cc66ff");
+                spawnFloatingText(ax, ay - 20, "诅咒祭坛出现！", PAL.vio2);
             }
         }
         if (a.timer > 10) {
@@ -457,7 +465,7 @@ function executeUltimate(boss, a, dt) {
                 a.phase = "active";
                 a.timer = 0;
                 a._waves = 0;
-                spawnFloatingText(boss.x, boss.y - 50, "蓄力完成！大招释放！", "#ff4444");
+                spawnFloatingText(boss.x, boss.y - 50, "蓄力完成！大招释放！", PAL.blood2);
             }
         }
     } else if (a.phase === "active") {
@@ -494,7 +502,7 @@ export function interruptBossUltimate() {
     if (!boss || !boss.action || boss.action.type !== "ultimate" || boss.action.phase !== "warn") return;
     boss.interrupted = true;
     boss.chargeProgress = 0;
-    spawnFloatingText(boss.x, boss.y - 50, "大招被打断！", "#7dff9b");
+    spawnFloatingText(boss.x, boss.y - 50, "大招被打断！", PAL.moss3);
     screenShake(6, 100);
     startRecovery(boss, 120); // 更长易伤
 }
@@ -572,7 +580,7 @@ export function damageBoss(dmg, silent = false) {
     if (!silent) {
         playBossHit();
         addScore(10);
-        spawnFloatingText(boss.x, boss.y - boss.r - 14, `-${finalDmg}`, boss.vulnerable ? "#ffd700" : "#ff8866");
+        spawnFloatingText(boss.x, boss.y - boss.r - 14, `-${finalDmg}`, boss.vulnerable ? PAL.gold3 : PAL.ember3);
     }
     // 蓄力时受伤可打断
     if (boss.action && boss.action.type === "ultimate" && boss.action.phase === "warn") {
@@ -584,8 +592,8 @@ export function damageBoss(dmg, silent = false) {
 function defeatBoss() {
     const boss = state.boss;
     spawnParticles(boss.x, boss.y, boss.color, 80);
-    spawnParticles(boss.x, boss.y, "#ffffff", 40);
-    for (let i = 0; i < 3; i++) spawnRing(boss.x, boss.y, "rgba(255,220,120,0.8)");
+    spawnParticles(boss.x, boss.y, PAL.bone1, 40);
+    for (let i = 0; i < 3; i++) spawnRing(boss.x, boss.y, PAL.gold3);
     screenShake(14, 400);
     state.boss = null; state.bossBullets = []; state.enemyBullets = []; state.bossDangerZones = [];
     playBossDeath();
@@ -684,10 +692,10 @@ function updateDangerZones() {
 // ─── 受击处理 ─────────────────────────────────────────────
 function onPaddleHit(bullet) {
     const pl = state.player;
-    if (pl.shieldTimer > 0) { spawnRing(bullet.x, bullet.y, "rgba(120,230,255,0.9)"); playWallHit(); return; }
+    if (pl.shieldTimer > 0) { spawnRing(bullet.x, bullet.y, PAL.arc3); playWallHit(); return; }
     if (state.invulnTimer > 0) return;
-    if (pl.bounceShield > 0 && Math.random() < pl.bounceShield) { spawnRing(bullet.x, bullet.y, "rgba(255,220,100,0.9)"); playWallHit(); return; }
-    if (Math.random() < pl.bossResist) { spawnFloatingText(state.paddle.x + state.paddle.width / 2, state.paddle.y - 24, "格挡！", "#7dff9b"); playWallHit(); return; }
+    if (pl.bounceShield > 0 && Math.random() < pl.bounceShield) { spawnRing(bullet.x, bullet.y, PAL.gold3); playWallHit(); return; }
+    if (Math.random() < pl.bossResist) { spawnFloatingText(state.paddle.x + state.paddle.width / 2, state.paddle.y - 24, "格挡！", PAL.moss3); playWallHit(); return; }
     const extraDmg = pl.curseBulletExtraDmg || 0;
     if (pl.thorns > 0 && state.boss) damageBoss(pl.thorns, true);
     state.invulnTimer = 100;
@@ -699,10 +707,10 @@ function onPaddleHit(bullet) {
 
 function onDashHit() {
     const pl = state.player;
-    if (pl.shieldTimer > 0) { spawnRing(state.paddle.x, state.paddle.y, "rgba(120,230,255,0.9)"); playWallHit(); return; }
+    if (pl.shieldTimer > 0) { spawnRing(state.paddle.x, state.paddle.y, PAL.arc3); playWallHit(); return; }
     if (state.invulnTimer > 0) return;
-    if (pl.bounceShield > 0 && Math.random() < pl.bounceShield) { spawnRing(state.paddle.x, state.paddle.y, "rgba(255,220,100,0.9)"); playWallHit(); return; }
-    if (Math.random() < pl.bossResist) { spawnFloatingText(state.paddle.x + state.paddle.width / 2, state.paddle.y - 24, "格挡！", "#7dff9b"); playWallHit(); return; }
+    if (pl.bounceShield > 0 && Math.random() < pl.bounceShield) { spawnRing(state.paddle.x, state.paddle.y, PAL.gold3); playWallHit(); return; }
+    if (Math.random() < pl.bossResist) { spawnFloatingText(state.paddle.x + state.paddle.width / 2, state.paddle.y - 24, "格挡！", PAL.moss3); playWallHit(); return; }
     state.invulnTimer = 100;
     playerHurt();
     screenShake(12, 220);
@@ -717,177 +725,174 @@ export function drawBoss() {
     ctx.save();
     ctx.translate(boss.x, boss.y);
 
-    // 冲锋预警线
+    // 冲锋预警：像素虚线（等距方块），闪烁用离散帧
     if (boss.action?.type === "charge" && boss.action.phase === "warn" && boss.chargeTarget) {
-        ctx.strokeStyle = `rgba(255,80,80,${0.3 + Math.sin(Date.now() / 80) * 0.2})`;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([8, 8]);
-        ctx.beginPath(); ctx.moveTo(0, 0);
-        ctx.lineTo(boss.chargeTarget.x - boss.x, boss.chargeTarget.y - boss.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        const dx = boss.chargeTarget.x - boss.x;
+        const dy = boss.chargeTarget.y - boss.y;
+        const dist = Math.hypot(dx, dy);
+        const steps = Math.floor(dist / (PX * 4));
+        const on = Math.floor(boss.t / 5) % 2 === 0;
+        for (let i = 1; i <= steps; i++) {
+            if (i % 2 === (on ? 0 : 1)) continue;
+            const px = Math.round((dx * (i / steps)) / PX) * PX;
+            const py = Math.round((dy * (i / steps)) / PX) * PX;
+            pRectRaw(px - PX, py - PX, PX * 2, PX * 2, PAL.blood2);
+        }
     }
 
-    // 跳砸落点标记
+    // 跳砸落点：像素同心环 + 网点填充
     if (boss.action?.type === "slam" && boss.action.phase === "warn" && boss.slamTarget) {
         const sx = boss.slamTarget.x - boss.x;
         const sy = boss.slamTarget.y - boss.y;
-        ctx.strokeStyle = `rgba(255,100,100,${0.5 + Math.sin(Date.now() / 120) * 0.3})`;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(sx, sy, 30 + Math.sin(Date.now() / 100) * 5, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.fillStyle = "rgba(255,50,50,0.15)";
-        ctx.fill();
+        const pulse = Math.floor(boss.t / 8) % 2 === 0 ? 0 : PX;
+        pRing(sx, sy, 30 + pulse, PAL.blood2, 1);
+        pRing(sx, sy, 20 + pulse, PAL.blood1, 1);
+        pRectRaw(sx - PX, sy - PX * 4, PX * 2, PX * 8, PAL.blood1);
+        pRectRaw(sx - PX * 4, sy - PX, PX * 8, PX * 2, PAL.blood1);
     }
 
-    // 蓄力进度
+    // 蓄力进度：环形改为顶部像素条 + 百分比
     if (boss.action?.type === "ultimate" && boss.action.phase === "warn") {
-        const angle = boss.chargeProgress / 100 * Math.PI * 2;
-        ctx.strokeStyle = "#ffcc00";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(0, 0, boss.r + 8, -Math.PI / 2, -Math.PI / 2 + angle);
-        ctx.stroke();
-        ctx.fillStyle = "#ffcc00";
-        ctx.font = "bold 14px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(`${Math.round(boss.chargeProgress)}%`, 0, 4);
+        const bw = boss.r * 2;
+        pBar(-bw / 2, -boss.r - PX * 8, bw, PX * 3, boss.chargeProgress / 100, PAL.gold2, {
+            bg: PAL.ink0, light: PAL.gold3,
+        });
+        pText(`${Math.round(boss.chargeProgress)}%`, 0, -boss.r - PX * 10, PAL.gold3, {
+            size: 12, bold: true, align: "center",
+        });
     }
 
-    // 召唤物（按类型区分图标）
-    const MINION_ICONS = { healer: "🌼", poison: "🌸", vine: "🌿", repair: "🛠️", shield: "🛡️", bomber: "💣" };
+    // 召唤物：像素圆 + 类型点阵图标 + 顶部血条
+    const MINION_ICONS = { healer: "flower", poison: "potion", vine: "vine", repair: "wrench", shield: "shield", bomber: "bomb" };
     for (const m of boss.minions) {
         const mx = m.x - boss.x;
         const my = m.y - boss.y;
-        const mc = m.color || "#7dff9b";
-        ctx.fillStyle = mc;
-        ctx.shadowColor = mc;
-        ctx.shadowBlur = 12;
-        ctx.beginPath(); ctx.arc(mx, my, m.r, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0;
+        const mc = m.color || PAL.moss3;
+        pCircleAt(mx, my, m.r, PAL.ink0);
+        pCircleAt(mx, my, m.r - PX, mc);
+        drawIcon(MINION_ICONS[m.type] || "star", mx, my, 2, PAL.ink0);
         if (m.flash > 0.02) {
-            ctx.fillStyle = `rgba(255,255,255,${(m.flash * 0.7).toFixed(3)})`;
-            ctx.beginPath(); ctx.arc(mx, my, m.r, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = Math.min(1, m.flash * 0.8);
+            pCircleAt(mx, my, m.r - PX, PAL.bone1);
+            ctx.globalAlpha = 1;
         }
-        ctx.font = "12px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(MINION_ICONS[m.type] || "?", mx, my + 4);
-        // HP 条
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.fillRect(mx - m.r, my - m.r - 6, m.r * 2, 4);
-        ctx.fillStyle = mc;
-        ctx.fillRect(mx - m.r, my - m.r - 6, (m.r * 2) * (m.hp / m.maxHp), 4);
+        pBar(mx - m.r, my - m.r - PX * 3, m.r * 2, PX * 2, m.hp / m.maxHp, mc, { bg: PAL.ink0 });
     }
 
-    // 祭坛
-    const ALTAR_ICONS = { dmg: "🗡️", speed: "💨", cd: "⏳" };
+    // 祭坛：石座 + 悬浮符文
+    const ALTAR_ICONS = { dmg: "sword", speed: "lightning", cd: "hourglass" };
     for (const al of boss.altars) {
         const ax = al.x - boss.x;
         const ay = al.y - boss.y;
-        ctx.fillStyle = "#3a2a4a";
-        ctx.strokeStyle = "#cc66ff";
-        ctx.lineWidth = 2;
-        ctx.shadowColor = "#cc66ff";
-        ctx.shadowBlur = 10;
-        ctx.beginPath(); ctx.arc(ax, ay, al.r, 0, Math.PI * 2); ctx.fill();
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        if (al.flash > 0.02) {
-            ctx.fillStyle = `rgba(255,255,255,${(al.flash * 0.7).toFixed(3)})`;
-            ctx.beginPath(); ctx.arc(ax, ay, al.r, 0, Math.PI * 2); ctx.fill();
+        pCircleAt(ax, ay, al.r, PAL.ink0);
+        pCircleAt(ax, ay, al.r - PX, PAL.vio1);
+        // 旋转符文点：三个绕祭坛公转的像素点
+        for (let i = 0; i < 3; i++) {
+            const a = boss.t * 0.03 + (Math.PI * 2 * i) / 3;
+            pRectRaw(ax + Math.cos(a) * (al.r + PX) - PX / 2, ay + Math.sin(a) * (al.r + PX) - PX / 2, PX, PX, PAL.vio3);
         }
-        ctx.font = "12px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(ALTAR_ICONS[al.type] || "🕯️", ax, ay + 4);
-        // HP 条
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.fillRect(ax - al.r, ay - al.r - 6, al.r * 2, 4);
-        ctx.fillStyle = "#cc66ff";
-        ctx.fillRect(ax - al.r, ay - al.r - 6, (al.r * 2) * (al.hp / al.maxHp), 4);
+        drawIcon(ALTAR_ICONS[al.type] || "candle", ax, ay, 2, PAL.vio3);
+        if (al.flash > 0.02) {
+            ctx.globalAlpha = Math.min(1, al.flash * 0.8);
+            pCircleAt(ax, ay, al.r - PX, PAL.bone1);
+            ctx.globalAlpha = 1;
+        }
+        pBar(ax - al.r, ay - al.r - PX * 3, al.r * 2, PX * 2, al.hp / al.maxHp, PAL.vio2, { bg: PAL.ink0 });
     }
 
-    // 易伤闪烁
-    if (boss.vulnerable) {
-        ctx.fillStyle = `rgba(255,220,50,${0.1 + Math.sin(Date.now() / 60) * 0.1})`;
-        ctx.beginPath(); ctx.arc(0, 0, boss.r + 8, 0, Math.PI * 2); ctx.fill();
+    // 尖刺环：像素方块沿圆周排布，替代描线尖刺
+    const spikeN = 12;
+    for (let i = 0; i < spikeN; i++) {
+        const a = (Math.PI * 2 * i) / spikeN + boss.t * 0.008;
+        const sr = boss.r + PX * 2 + (Math.floor(boss.t / 20) % 2 === 0 ? PX : 0);
+        const sx = Math.round((Math.cos(a) * sr) / PX) * PX;
+        const sy = Math.round((Math.sin(a) * sr) / PX) * PX;
+        pRectRaw(sx - PX, sy - PX, PX * 2, PX * 2, boss.phase > 0 ? PAL.blood2 : boss.color);
     }
 
-    // 尖刺
-    ctx.strokeStyle = boss.color; ctx.lineWidth = 3;
-    for (let i = 0; i < 8; i++) {
-        const a = (Math.PI * 2 * i) / 8 + boss.t * 0.01;
-        ctx.beginPath(); ctx.moveTo(Math.cos(a) * (boss.r - 8), Math.sin(a) * (boss.r - 8));
-        ctx.lineTo(Math.cos(a) * (boss.r + 16), Math.sin(a) * (boss.r + 16)); ctx.stroke();
-    }
+    // 主体像素造型
+    const { cell } = drawBossSprite(boss.bossType, boss.color, boss.r, boss.t, {
+        phase2: boss.phase > 0,
+        flash: boss.flash,
+        vulnerable: boss.vulnerable,
+    });
 
-    // 主体
-    const grad = ctx.createRadialGradient(-10, -10, 4, 0, 0, boss.r);
-    grad.addColorStop(0, "#ffffff"); grad.addColorStop(0.35, boss.color); grad.addColorStop(1, boss.color);
-    ctx.shadowColor = boss.color; ctx.shadowBlur = 30;
-    ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.arc(0, 0, boss.r, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0;
+    // 最终 Boss 加冠
+    if (boss.level >= 50) drawBossCrown(boss.r, cell);
 
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath(); ctx.arc(0, 0, boss.r * 0.3 + Math.sin(boss.t * 0.15) * 3, 0, Math.PI * 2); ctx.fill();
-
-    if (boss.flash > 0.02) {
-        ctx.fillStyle = `rgba(255,255,255,${(boss.flash * 0.75).toFixed(3)})`;
-        ctx.beginPath(); ctx.arc(0, 0, boss.r, 0, Math.PI * 2); ctx.fill();
-    }
     ctx.restore();
 }
 
+// Boss 血条：紧贴顶栏下沿，居中；名称与状态标签在条内，避免占用额外纵向空间
 export function drawBossBar() {
     const boss = state.boss;
     if (!boss) return;
-    const bw = 420, bx = W / 2 - bw / 2, by = 60;
+    const bw = 440;
+    const bx = Math.round((W - bw) / 2);
+    const by = HUD_TOP_H + 8;
     const ratio = Math.max(0, boss.hp / boss.maxHp);
-    ctx.fillStyle = "rgba(16,12,24,0.85)"; ctx.fillRect(bx - 4, by - 4, bw + 8, 24);
-    ctx.fillStyle = "#43203a"; ctx.fillRect(bx, by, bw, 16);
-    const grad = ctx.createLinearGradient(bx, by, bx + bw, by);
-    grad.addColorStop(0, boss.color); grad.addColorStop(1, "#ff7799");
-    ctx.fillStyle = grad; ctx.fillRect(bx, by, bw * ratio, 16);
-    ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, 16);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 14px 'PingFang SC','Microsoft YaHei',sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(`${boss.name}${boss.vulnerable ? " [易伤]" : ""}${boss.phase > 0 ? " [P2]" : ""}`, W / 2, by - 10);
+
+    // 名称 + 状态
+    let label = boss.name;
+    if (boss.phase > 0) label += " · 二阶段";
+    if (boss.vulnerable) label += " · 易伤";
+    pText(label, W / 2, by - PX, boss.vulnerable ? PAL.gold3 : PAL.bone1, {
+        size: 13, bold: true, align: "center",
+    });
+
+    // 血条：分段刻度，像素风更易读
+    pBar(bx, by + PX, bw, PX * 4, ratio, boss.phase > 0 ? PAL.blood2 : boss.color, {
+        bg: PAL.ink1, light: boss.phase > 0 ? PAL.blood3 : PAL.bone1, border: PAL.ink0,
+    });
+    // 每 25% 一道分隔刻线
+    for (let i = 1; i < 4; i++) {
+        pRectRaw(bx + (bw * i) / 4, by + PX, PX, PX * 4, PAL.ink0);
+    }
 }
 
+// Boss 弹幕：菱形像素弹，比圆点更易在混战中辨识
 export function drawBossBullets() {
     for (const b of state.bossBullets) {
-        ctx.shadowColor = "#ff6b9d"; ctx.shadowBlur = 8;
-        ctx.fillStyle = "#ff6b9d"; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.4, 0, Math.PI * 2); ctx.fill();
+        const r = Math.max(PX * 2, Math.round(b.r / PX) * PX);
+        // 外层轮廓
+        pRectRaw(b.x - r, b.y - PX, r * 2, PX * 2, PAL.ink0);
+        pRectRaw(b.x - PX, b.y - r, PX * 2, r * 2, PAL.ink0);
+        // 主体
+        pRectRaw(b.x - r + PX, b.y - PX / 2, r * 2 - PX * 2, PX, PAL.blood3);
+        pRectRaw(b.x - PX / 2, b.y - r + PX, PX, r * 2 - PX * 2, PAL.blood3);
+        // 核心
+        pRectRaw(b.x - PX, b.y - PX, PX * 2, PX * 2, PAL.bone1);
     }
-    ctx.shadowBlur = 0;
 }
 
-// 地面危险区
+// 地面危险区：像素环 + 网点填充，保持地面可读
 export function drawBossDangerZones() {
     for (const z of state.bossDangerZones) {
         if (z.type === "shockwave") {
-            ctx.strokeStyle = `rgba(255,200,100,${z.life / 60 * 0.6})`;
-            ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2); ctx.stroke();
+            ctx.globalAlpha = Math.max(0, Math.min(1, (z.life / 60) * 0.9));
+            pRing(z.x, z.y, z.r, PAL.ember2, 2);
+            pRing(z.x, z.y, z.r - PX * 2, PAL.ember1, 1);
+            ctx.globalAlpha = 1;
         } else if (z.type === "hazard") {
-            ctx.fillStyle = `rgba(200,50,50,${z.life / 240 * 0.25})`;
-            ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = `rgba(255,80,80,${z.life / 240 * 0.4})`;
-            ctx.lineWidth = 2;
-            ctx.setLineDash([4, 4]);
-            ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2); ctx.stroke();
-            ctx.setLineDash([]);
+            const a = Math.max(0, Math.min(1, z.life / 240));
+            // 网点填充：密度随剩余时间衰减，像素风的"半透明"
+            const d = a * 0.35;
+            if (d > 0.02) {
+                pDitherMask(z.x - z.r, z.y - z.r, z.r * 2, z.r * 2, PAL.blood1, d);
+            }
+            ctx.globalAlpha = Math.min(1, a * 1.2);
+            pRing(z.x, z.y, z.r, PAL.blood2, 1);
+            ctx.globalAlpha = 1;
         }
     }
 }
 
+// 方块射出的子弹：小型像素箭头，朝下
 export function drawEnemyBullets() {
     for (const b of state.enemyBullets) {
-        ctx.shadowColor = "#ffa94d"; ctx.shadowBlur = 6;
-        ctx.fillStyle = "#ffa94d"; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+        const r = Math.max(PX, Math.round(b.r / PX) * PX);
+        pRectRaw(b.x - r, b.y - r, r * 2, r * 2, PAL.ink0);
+        pRectRaw(b.x - r + PX / 2, b.y - r + PX / 2, r * 2 - PX, r * 2 - PX, PAL.ember2);
+        pRectRaw(b.x - PX / 2, b.y, PX, r, PAL.ember3);
     }
-    ctx.shadowBlur = 0;
 }

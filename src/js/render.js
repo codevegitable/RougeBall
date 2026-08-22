@@ -1,9 +1,11 @@
-import { W, H, COLORS, STATE, PADDLE_BASE_W } from "./constants.js";
+import { W, H, STATE, PADDLE_BASE_W } from "./constants.js";
 import { state } from "./state.js";
 import { ctx } from "./canvas.js";
-import { roundRect, shadeColor } from "./utils.js";
 import { skinDef, getSelectedSkin, DEFAULT_SKIN_COLORS } from "./unlocks.js";
-import { drawStars } from "./stars.js";
+import { PAL, BLOCK_TIERS, rgba } from "./palette.js";
+import { PX, snap, pRect, pRectRaw, pStroke, pCircle, initPixelMode } from "./pixel.js";
+import { FIELD_TOP, SKILL_Y } from "./layout.js";
+import { drawDungeon } from "./stars.js";
 import { drawParticles } from "./particles.js";
 import { drawEffects, drawHurtOverlay } from "./fx.js";
 import { drawBoss, drawBossBar, drawBossBullets, drawBossDangerZones, drawEnemyBullets } from "./boss.js";
@@ -22,170 +24,195 @@ import {
     drawVictory,
 } from "./ui.js";
 
+// ─── 挡板：石质符文平台 ───────────────────────────────────
 export function drawPaddle() {
     if (!state.paddle) return;
-    // 获取皮肤颜色
     const sk = skinDef(getSelectedSkin()) || DEFAULT_SKIN_COLORS;
-    const p1 = sk.paddle1;
-    const p2 = sk.paddle2;
-    const glowColor = sk.glow || "rgba(192,96,160,0.55)";
-    ctx.save();
-    // 受击无敌闪烁
-    if (state.invulnTimer > 0 && Math.floor(state.invulnTimer / 6) % 2 === 0) {
-        ctx.globalAlpha = 0.45;
+    const light = sk.paddle2;
+    const base = sk.paddle1;
+
+    const p = state.paddle;
+    const x = snap(p.x), y = snap(p.y), w = snap(p.width), h = snap(p.height);
+
+    // 受击无敌闪烁：整体隐去一半帧
+    if (state.invulnTimer > 0 && Math.floor(state.invulnTimer / 5) % 2 === 0) {
+        ctx.globalAlpha = 0.4;
     }
 
-    const grad = ctx.createLinearGradient(state.paddle.x, state.paddle.y, state.paddle.x, state.paddle.y + state.paddle.height);
-    grad.addColorStop(0, p1);
-    grad.addColorStop(1, p2);
-    ctx.fillStyle = grad;
-    roundRect(state.paddle.x, state.paddle.y, state.paddle.width, state.paddle.height, 7);
-    ctx.fill();
+    // 硬黑轮廓
+    pRect(x - PX, y - PX, w + PX * 2, h + PX * 2, PAL.ink0);
+    // 主体：上亮下暗的三段式，替代线性渐变
+    pRect(x, y, w, h, base);
+    pRect(x, y, w, PX, light);                    // 顶部高光
+    pRect(x, y + h - PX, w, PX, PAL.ink1);        // 底部阴影
+    pRect(x, y + PX, PX, h - PX * 2, light);      // 左侧亮边
+    pRect(x + w - PX, y + PX, PX, h - PX * 2, PAL.ink1);
 
-    // Glow
-    ctx.shadowColor = glowColor;
-    ctx.shadowBlur = 15;
-    roundRect(state.paddle.x, state.paddle.y, state.paddle.width, state.paddle.height, 7);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    // 中央符文槽：三个等距凹点，纯装饰但强化"平台"的实体感
+    const runeCount = Math.max(3, Math.floor(w / (PX * 12)));
+    for (let i = 0; i < runeCount; i++) {
+        const rx = snap(x + (w / (runeCount + 1)) * (i + 1) - PX);
+        pRect(rx, y + PX * 2, PX * 2, h - PX * 4, PAL.ink1);
+    }
 
-    // 受击区域（固定 PADDLE_BASE_W + 诅咒惩罚）强调发光
+    // 核心受击区（PADDLE_BASE_W + 诅咒惩罚）：用金色端刻标记，不用虚线
     const baseW = PADDLE_BASE_W * (1 + (state.player.curseHitPenalty || 0));
-    const baseX = state.paddle.x + (state.paddle.width - baseW) / 2;
-    ctx.shadowColor = "rgba(255,220,100,0.6)";
-    ctx.shadowBlur = 10;
-    ctx.strokeStyle = "rgba(255,220,100,0.5)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    roundRect(baseX, state.paddle.y, baseW, state.paddle.height, 7);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.shadowBlur = 0;
+    const bx = snap(p.x + (p.width - baseW) / 2);
+    const bw = snap(baseW);
+    pRect(bx, y - PX, PX, PX, PAL.gold2);
+    pRect(bx + bw - PX, y - PX, PX, PX, PAL.gold2);
+    pRect(bx, y - PX * 2, PX * 2, PX, PAL.gold3);
+    pRect(bx + bw - PX * 2, y - PX * 2, PX * 2, PX, PAL.gold3);
 
-    // Hit flash
-    if (state.paddle.flash > 0.02) {
-        ctx.fillStyle = `rgba(255,255,255,${(state.paddle.flash * 0.7).toFixed(3)})`;
-        roundRect(state.paddle.x, state.paddle.y, state.paddle.width, state.paddle.height, 7);
-        ctx.fill();
+    // 击球闪白
+    if (p.flash > 0.02) {
+        ctx.fillStyle = rgba(PAL.bone1, p.flash * 0.75);
+        ctx.fillRect(x, y, w, h);
     }
 
-    // 受击红闪
+    // 受击红框
     if (state.hurtTimer > 0) {
-        ctx.strokeStyle = `rgba(255,70,70,${(state.hurtTimer / 16 * 0.8).toFixed(3)})`;
-        ctx.lineWidth = 3;
-        roundRect(state.paddle.x - 2, state.paddle.y - 2, state.paddle.width + 4, state.paddle.height + 4, 9);
-        ctx.stroke();
+        pStroke(x - PX * 2, y - PX * 2, w + PX * 4, h + PX * 4, PAL.blood2, 1);
     }
-    ctx.restore();
 
-    // 能量护盾
+    ctx.globalAlpha = 1;
+
+    // 能量护盾：脉动像素框
     if (state.player.shieldTimer > 0) {
-        ctx.strokeStyle = `rgba(120,230,255,${0.35 + Math.sin(Date.now() / 120) * 0.25})`;
-        ctx.lineWidth = 3;
-        roundRect(state.paddle.x - 8, state.paddle.y - 8, state.paddle.width + 16, state.paddle.height + 16, 12);
-        ctx.stroke();
+        const pulse = Math.floor(Date.now() / 120) % 2 === 0;
+        pStroke(x - PX * 3, y - PX * 3, w + PX * 6, h + PX * 6, pulse ? PAL.arc3 : PAL.arc2, 1);
     }
 }
 
+// ─── 球：像素宝珠 ─────────────────────────────────────────
 export function drawBalls() {
     for (let i = 0; i < state.balls.length; i++) {
         const b = state.balls[i];
         const isMain = i === 0;
+        const core = isMain ? PAL.gold3 : PAL.arc3;
+        const mid = isMain ? PAL.gold2 : PAL.arc2;
+        const edge = isMain ? PAL.gold1 : PAL.arc1;
 
-        // Trail
-        for (const t of b.trail) {
-            const tc = isMain ? `rgba(255,220,140,${t.life * 0.25})` : `rgba(255,255,255,${t.life * 0.2})`;
-            ctx.fillStyle = tc;
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, b.radius * 0.6, 0, Math.PI * 2);
-            ctx.fill();
+        // 拖尾：逐渐变小的像素方块
+        for (let t = 0; t < b.trail.length; t++) {
+            const tr = b.trail[t];
+            if (tr.life <= 0.15) continue;
+            const s = Math.max(PX, Math.round((b.radius * 0.7 * tr.life) / PX) * PX);
+            ctx.fillStyle = rgba(tr.life > 0.6 ? mid : edge, tr.life * 0.5);
+            ctx.fillRect(Math.round(tr.x - s / 2), Math.round(tr.y - s / 2), s, s);
         }
 
-        // Glow
-        ctx.shadowColor = isMain ? "rgba(255,190,60,0.55)" : COLORS.ballGlow;
-        ctx.shadowBlur = isMain ? 16 : 12;
-
-        const grad = ctx.createRadialGradient(b.x - 2, b.y - 2, 1, b.x, b.y, b.radius);
-        grad.addColorStop(0, "#ffffff");
-        grad.addColorStop(0.6, isMain ? "#ffe8b0" : "#e8e0ff");
-        grad.addColorStop(1, isMain ? "#e8a040" : "#a0a0d0");
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        // 球体：外圈 + 主体 + 左上高光
+        pCircle(b.x, b.y, b.radius, edge);
+        pCircle(b.x, b.y, b.radius - PX * 0.5, mid);
+        pRectRaw(b.x - b.radius * 0.5, b.y - b.radius * 0.5, PX * 2, PX * 2, core);
     }
 }
 
+// ─── 方块：地牢石砖 ───────────────────────────────────────
 export function drawBlocks() {
     for (const bl of state.blocks) {
-        // 不可击碎方块：深色金属
+        const x = snap(bl.x), y = snap(bl.y);
+        const w = snap(bl.w), h = snap(bl.h);
+
         if (bl.indestructible) {
-            ctx.fillStyle = COLORS.unbreakable;
-            ctx.strokeStyle = "rgba(140,150,190,0.6)";
-            ctx.lineWidth = 2;
-            roundRect(bl.x, bl.y, bl.w, bl.h, 4);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = "rgba(255,255,255,0.25)";
-            ctx.beginPath();
-            ctx.arc(bl.x + bl.w / 2, bl.y + bl.h / 2, 4, 0, Math.PI * 2);
-            ctx.fill();
+            drawMetalBlock(x, y, w, h);
             continue;
         }
 
-        const ci = Math.min(bl.maxHp - 1, 3);
-        const color = COLORS.blockColors[ci];
+        const tier = BLOCK_TIERS[Math.min(bl.maxHp - 1, 3)];
 
-        ctx.shadowColor = COLORS.blockGlow[ci];
-        ctx.shadowBlur = 6;
+        // 轮廓
+        pRect(x, y, w, h, PAL.ink0);
+        // 主体
+        pRect(x + PX, y + PX, w - PX * 2, h - PX * 2, tier.base);
+        // 浮雕：上左亮，下右暗
+        pRect(x + PX, y + PX, w - PX * 2, PX, tier.light);
+        pRect(x + PX, y + PX, PX, h - PX * 2, tier.light);
+        pRect(x + PX, y + h - PX * 2, w - PX * 2, PX, tier.shadow);
+        pRect(x + w - PX * 2, y + PX, PX, h - PX * 2, tier.shadow);
 
-        const grad = ctx.createLinearGradient(bl.x, bl.y, bl.x, bl.y + bl.h);
-        grad.addColorStop(0, color);
-        grad.addColorStop(1, shadeColor(color, -30));
-        ctx.fillStyle = grad;
-        roundRect(bl.x, bl.y, bl.w, bl.h, 4);
-        ctx.fill();
-
-        ctx.shadowBlur = 0;
-
-        // 射击中的方块：橙色炮口
-        if (bl.shooter) {
-            ctx.fillStyle = "#ffa94d";
-            ctx.beginPath();
-            ctx.arc(bl.x + bl.w / 2, bl.y + bl.h, 4, 0, Math.PI * 2);
-            ctx.fill();
+        // 内部石纹：一条实色暗缝，让方块像砖块而非色块（用 shadow 档而非 alpha 混合）
+        if (h >= PX * 5) {
+            pRect(x + PX * 3, y + Math.round(h / 2 / PX) * PX, w - PX * 6, PX, tier.shadow);
         }
 
-        // HP indicator
+        // 受损裂纹：血量越低裂纹越多（替代原本的进度条）
         if (bl.hp < bl.maxHp) {
-            const ratio = bl.hp / bl.maxHp;
-            ctx.fillStyle = "rgba(0,0,0,0.3)";
-            roundRect(bl.x + 2, bl.y + 2, bl.w - 4, bl.h - 4, 3);
-            ctx.fill();
-            ctx.fillStyle = color;
-            roundRect(bl.x + 2, bl.y + 2, (bl.w - 4) * ratio, bl.h - 4, 3);
-            ctx.fill();
+            drawCracks(x, y, w, h, bl.hp / bl.maxHp, tier.shadow);
+        }
+
+        // 射手方块：底部炮口
+        if (bl.shooter) {
+            const cx = snap(x + w / 2 - PX);
+            pRect(cx, y + h - PX, PX * 2, PX * 2, PAL.ember2);
+            pRect(cx, y + h, PX * 2, PX, PAL.ember3);
+        }
+
+        // 移动方块：两侧箭头刻痕
+        if (bl.moving) {
+            pRect(x + PX * 2, y + Math.round(h / 2 / PX) * PX - PX, PX, PX * 2, tier.light);
+            pRect(x + w - PX * 3, y + Math.round(h / 2 / PX) * PX - PX, PX, PX * 2, tier.light);
         }
     }
 }
 
+// 不可击碎：铆钉铁块
+function drawMetalBlock(x, y, w, h) {
+    pRect(x, y, w, h, PAL.ink0);
+    pRect(x + PX, y + PX, w - PX * 2, h - PX * 2, PAL.stone1);
+    pRect(x + PX, y + PX, w - PX * 2, PX, PAL.stone3);
+    pRect(x + PX, y + PX, PX, h - PX * 2, PAL.stone2);
+    pRect(x + PX, y + h - PX * 2, w - PX * 2, PX, PAL.stone0);
+    pRect(x + w - PX * 2, y + PX, PX, h - PX * 2, PAL.stone0);
+    // 四角铆钉
+    const rv = [[PX * 2, PX * 2], [w - PX * 3, PX * 2], [PX * 2, h - PX * 3], [w - PX * 3, h - PX * 3]];
+    for (const [dx, dy] of rv) {
+        pRect(x + dx, y + dy, PX, PX, PAL.stone3);
+    }
+    // 中心 X 刻痕，暗示"打不破"
+    const cx = snap(x + w / 2), cy = snap(y + h / 2);
+    pRect(cx - PX, cy - PX, PX * 2, PX * 2, PAL.stone0);
+    pRect(cx - PX * 2, cy - PX * 2, PX, PX, PAL.stone3);
+    pRect(cx + PX, cy + PX, PX, PX, PAL.stone3);
+}
+
+// 裂纹：确定性伪随机，保证同一方块裂纹稳定不闪烁
+function drawCracks(x, y, w, h, ratio, color) {
+    const dmg = 1 - ratio;
+    const seed = (x * 31 + y * 17) | 0;
+    const cols = Math.floor(w / PX) - 2;
+    const rows = Math.floor(h / PX) - 2;
+    const count = Math.floor(cols * rows * dmg * 0.28);
+    ctx.fillStyle = color;
+    let s = seed;
+    for (let i = 0; i < count; i++) {
+        s = (s * 1103515245 + 12345) & 0x7fffffff;
+        const cx = 1 + (s >> 8) % cols;
+        s = (s * 1103515245 + 12345) & 0x7fffffff;
+        const cy = 1 + (s >> 8) % rows;
+        ctx.fillRect(x + cx * PX, y + cy * PX, PX, PX);
+    }
+}
+
+// ─── 主渲染 ───────────────────────────────────────────────
 export function render() {
-    // Clear
-    ctx.fillStyle = COLORS.bg;
+    initPixelMode();
+
+    // 底色
+    ctx.fillStyle = PAL.ink1;
     ctx.fillRect(0, 0, W, H);
 
-    // 爱丽丝仙境装饰背景
-    drawWonderlandDecor();
-
-    // 震屏：整个世界轻微位移
+    // 震屏：整个世界按像素网格位移（保持像素对齐）
     ctx.save();
     if (state.shakeTime > 0) {
         const s = state.shakePower * Math.min(1, state.shakeTime / 120);
-        ctx.translate((Math.random() * 2 - 1) * s, (Math.random() * 2 - 1) * s);
+        const ox = Math.round(((Math.random() * 2 - 1) * s) / PX) * PX;
+        const oy = Math.round(((Math.random() * 2 - 1) * s) / PX) * PX;
+        ctx.translate(ox, oy);
     }
 
-    drawStars();
+    drawDungeon();
 
     if (state.gameState === STATE.MENU) {
         drawMenu();
@@ -202,6 +229,11 @@ export function render() {
     drawBossBullets();
     drawBossDangerZones();
     drawEnemyBullets();
+
+    // 暗角在 HUD 之前绘制，且只覆盖游戏区：
+    // 之前它画在最后且覆盖全屏，四角的网点会压掉 60~78% 的技能槽与生命值。
+    drawFieldVignette();
+
     drawUI();
     if (state.boss) drawBossBar();
 
@@ -222,30 +254,43 @@ export function render() {
 
     ctx.restore();
 
-    // 受击红色遮罩 + 暗角（震屏之外）
     drawHurtOverlay();
-    drawVignette();
 }
 
-function drawVignette() {
-    const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.78);
-    g.addColorStop(0, "rgba(0,0,0,0)");
-    g.addColorStop(1, "rgba(8,4,16,0.52)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-}
+// ─── 暗角 ─────────────────────────────────────────────────
+// 只作用于游戏区（顶栏之下、底栏之上），并且只压左右两侧边缘。
+// HUD 所在的四角完全不参与，保证技能槽/生命值/层数永远清晰可读。
+let vignetteCache = null;
+function drawFieldVignette() {
+    const top = FIELD_TOP;
+    const bottom = SKILL_Y - PX * 2;      // 底栏之上留空
+    const height = bottom - top;
+    if (height <= 0) return;
 
-function drawWonderlandDecor() {
-    ctx.save();
-    ctx.globalAlpha = 0.04;
-    const suits = ["♠", "♥", "♣", "♦"];
-    for (let i = 0; i < 12; i++) {
-        const x = (i % 4) * 200 + 40 + (i * 37) % 100;
-        const y = (i * 77) % 600;
-        ctx.font = `${22 + (i % 3) * 14}px serif`;
-        ctx.fillStyle = i % 2 === 0 ? "#e8c84a" : "#c060a0";
-        ctx.textAlign = "center";
-        ctx.fillText(suits[i % 4], x, y);
+    if (!vignetteCache) {
+        vignetteCache = document.createElement("canvas");
+        vignetteCache.width = W;
+        vignetteCache.height = height;
+        const c = vignetteCache.getContext("2d");
+        c.fillStyle = PAL.ink0;
+        // 只按水平距离衰减：越靠左右边缘越暗，纵向保持均匀，
+        // 这样不会在游戏区上下边界留下明显的暗弧。
+        const cx = W / 2;
+        for (let y = 0; y < height; y += PX) {
+            for (let x = 0; x < W; x += PX) {
+                const d = Math.abs(x + PX / 2 - cx) / cx;
+                const density = Math.max(0, (d - 0.72) / 0.28) * 0.55;
+                const th = (BAYER[(y / PX) & 3][(x / PX) & 3] + 0.5) / 16;
+                if (density > th) c.fillRect(x, y, PX, PX);
+            }
+        }
     }
-    ctx.restore();
+    ctx.drawImage(vignetteCache, 0, top);
 }
+
+const BAYER = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5],
+];

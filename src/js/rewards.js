@@ -5,6 +5,7 @@ import { playSkillUse } from "./sound.js";
 import { isRewardUnlocked } from "./unlocks.js";
 import { CURSES_MAP } from "./curses.js";
 import { REWARD_DATA, REWARD_TYPE_NAME } from "./data/rewards.js";
+import { PAL } from "./palette.js";
 
 // ─── 数据与行为绑定 ───────────────────────────────────────
 // 奖励的即时生效效果（applyId → 函数）
@@ -231,7 +232,7 @@ export function useSkillFromGame(index) {
     if (!s) return;
     const def = REWARD_MAP[s.id];
     if (s.cd > 0) {
-        spawnFloatingText(400, 240, "技能冷却中", "#ff8080");
+        spawnFloatingText(400, 240, "技能冷却中", PAL.blood3);
         return;
     }
     def.use();
@@ -239,7 +240,7 @@ export function useSkillFromGame(index) {
     // 弹幕领主：释放技能时额外发射 3 个球
     if (state.player.perks.danmaku_lord) spawnExtraBalls(3);
     playSkillUse();
-    spawnFloatingText(400, 240, `${def.name}！`, "#7dff9b");
+    spawnFloatingText(400, 240, `${def.name}！`, PAL.moss3);
 }
 
 // ─── 球与时间缩放 ─────────────────────────────────────────

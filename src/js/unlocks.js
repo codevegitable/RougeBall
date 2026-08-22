@@ -77,7 +77,9 @@ export function skinDef(tierIndex) {
 export { SKIN_START_SKILLS };
 
 // 默认皮肤颜色
-export const DEFAULT_SKIN_COLORS = SKIN_DEFS[0] ? { paddle1: SKIN_DEFS[0].paddle1, paddle2: SKIN_DEFS[0].paddle2, glow: SKIN_DEFS[0].glow } : { paddle1: "#8b3a8b", paddle2: "#c060a0", glow: "rgba(192,96,160,0.55)" };
+export const DEFAULT_SKIN_COLORS = SKIN_DEFS[0]
+    ? { paddle1: SKIN_DEFS[0].paddle1, paddle2: SKIN_DEFS[0].paddle2, glow: SKIN_DEFS[0].glow }
+    : { paddle1: "#633a86", paddle2: "#a464c4", glow: "#cfa0e4" };
 
 // 奖励解锁层级映射（由奖励数据的 tierLock 字段自动推导）
 const REWARD_TIER_MAP = Object.fromEntries(

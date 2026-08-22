@@ -14,6 +14,8 @@ import {
     playPlayerHit,
     playHeal,
 } from "./sound.js";
+import { PAL } from "./palette.js";
+import { FIELD_TOP } from "./layout.js";
 
 // 挡板实际受击区域（加宽翼不参与弹幕受击，受击长度固定为 PADDLE_BASE_W + 诅咒惩罚）
 export function paddleHitRect() {
@@ -92,20 +94,20 @@ export function updateEnemies() {
 
 function enemyPaddleHit(bullet) {
     const pl = state.player;
-    spawnParticles(bullet.x, bullet.y, "#ffa94d", 6);
+    spawnParticles(bullet.x, bullet.y, PAL.ember2, 6);
     if (pl.shieldTimer > 0) {
-        spawnRing(bullet.x, bullet.y, "rgba(120,230,255,0.9)");
+        spawnRing(bullet.x, bullet.y, PAL.arc3);
         playWallHit();
         return;
     }
     if (state.invulnTimer > 0) return;
     if (pl.bounceShield > 0 && Math.random() < pl.bounceShield) {
-        spawnRing(bullet.x, bullet.y, "rgba(255,220,100,0.9)");
+        spawnRing(bullet.x, bullet.y, PAL.gold3);
         playWallHit();
         return;
     }
     if (Math.random() < pl.bossResist) {
-        spawnFloatingText(state.paddle.x + state.paddle.width / 2, state.paddle.y - 24, "格挡！", "#7dff9b");
+        spawnFloatingText(state.paddle.x + state.paddle.width / 2, state.paddle.y - 24, "格挡！", PAL.moss3);
         playWallHit();
         return;
     }
@@ -133,7 +135,7 @@ function damageBlock(bl, dmg) {
         state.blocks.splice(idx, 1);
         playBlockHit();
     } else {
-        spawnParticles(bl.x + bl.w / 2, bl.y + bl.h / 2, "#ffffff", 2);
+        spawnParticles(bl.x + bl.w / 2, bl.y + bl.h / 2, PAL.bone1, 2);
     }
 }
 
@@ -167,13 +169,13 @@ function postBreakHooks(cx, cy, bl) {
     // 吸血之触
     if (p.healChance > 0 && Math.random() < p.healChance) {
         p.lives += 1;
-        spawnFloatingText(cx, cy - 20, "生命 +1", "#7dff9b");
+        spawnFloatingText(cx, cy - 20, "生命 +1", PAL.moss3);
         playHeal();
     }
     // 血之吸吮技能
     if (p.siphonTimer > 0) {
         p.lives += 0.3;
-        spawnFloatingText(cx, cy - 20, "生命 +0.3", "#ff8080");
+        spawnFloatingText(cx, cy - 20, "生命 +0.3", PAL.blood3);
         playHeal();
     }
     // 生命虹吸：每击碎 5 个方块回复
@@ -182,7 +184,7 @@ function postBreakHooks(cx, cy, bl) {
         if (p._siphonCounter >= 5) {
             p._siphonCounter = 0;
             p.lives += p.lifeSiphon;
-            spawnFloatingText(cx, cy - 20, `生命 +${p.lifeSiphon}`, "#7dff9b");
+            spawnFloatingText(cx, cy - 20, `生命 +${p.lifeSiphon}`, PAL.moss3);
             playHeal();
         }
     }
@@ -197,8 +199,8 @@ function postBreakHooks(cx, cy, bl) {
     let explode = p.explosiveTimer > 0;
     if (!explode && explN > 0 && Math.random() < 0.25 * explN) explode = true;
     if (explode) {
-        spawnRing(cx, cy, "rgba(255,160,60,0.9)");
-        spawnParticles(cx, cy, "#ff9944", 16);
+        spawnRing(cx, cy, PAL.ember2);
+        spawnParticles(cx, cy, PAL.ember2, 16);
         for (const nb of blocksNear(cx, cy, 80)) damageBlock(nb, 1);
         screenShake(4, 90);
     }
@@ -210,8 +212,8 @@ function postBreakHooks(cx, cy, bl) {
             if (target) {
                 const tx = target.x + target.w / 2;
                 const ty = target.y + target.h / 2;
-                spawnFloatingText(tx, ty - 10, "流星！", "#ffcc33");
-                spawnRing(tx, ty, "rgba(255,220,120,0.9)");
+                spawnFloatingText(tx, ty - 10, "流星！", PAL.gold3);
+                spawnRing(tx, ty, PAL.gold3);
                 damageBlock(target, 3);
             }
         }
@@ -224,7 +226,7 @@ const onBallHits = (b, cx) => {
     // 分裂之球
     if (state.player.perks.split_ball && (b.blockHits % 6) === 0 && state.balls.length < MAX_BALLS) {
         spawnExtraBalls(1);
-        spawnFloatingText(cx, b.y - 20, "分裂！", "#a08bff");
+        spawnFloatingText(cx, b.y - 20, "分裂！", PAL.vio3);
     }
 };
 
@@ -262,19 +264,20 @@ export function updateBalls() {
         if (b.x - b.radius <= 0) {
             b.x = b.radius;
             b.vx = Math.abs(b.vx);
-            spawnParticles(b.x, b.y, "#8892b0", 3);
+            spawnParticles(b.x, b.y, PAL.stone3, 3);
             playWallHit();
         }
         if (b.x + b.radius >= W) {
             b.x = W - b.radius;
             b.vx = -Math.abs(b.vx);
-            spawnParticles(b.x, b.y, "#8892b0", 3);
+            spawnParticles(b.x, b.y, PAL.stone3, 3);
             playWallHit();
         }
-        if (b.y - b.radius <= 0) {
-            b.y = b.radius;
+        // 天花板 = 游戏区上沿（顶栏下方），避免球飞到 HUD 背后看不见
+        if (b.y - b.radius <= FIELD_TOP) {
+            b.y = FIELD_TOP + b.radius;
             b.vy = Math.abs(b.vy);
-            spawnParticles(b.x, b.y, "#8892b0", 3);
+            spawnParticles(b.x, b.y, PAL.stone3, 3);
             playWallHit();
         }
 
@@ -288,7 +291,7 @@ export function updateBalls() {
             if (p.lifesaverLeft > 0) {
                 p.lifesaverLeft--;
                 resetBallToPaddle(b);
-                spawnFloatingText(W / 2, H / 2, "救生圈生效！", "#7dff9b");
+                spawnFloatingText(W / 2, H / 2, "救生圈生效！", PAL.moss3);
                 playHeal();
                 continue;
             }
@@ -317,7 +320,7 @@ export function updateBalls() {
             b.piercingLeft = p.maxPiercing;
 
             flashPaddle();
-            spawnRing(b.x, b.y, "rgba(130,160,255,0.9)");
+            spawnRing(b.x, b.y, PAL.arc2);
             playPaddleHit();
         }
 
@@ -340,15 +343,15 @@ export function updateBalls() {
                 }
                 minion.hp -= p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
                 minion.flash = 1;
-                spawnParticles(b.x, b.y, "#7dff9b", 4);
+                spawnParticles(b.x, b.y, PAL.moss3, 4);
                 if (minion.hp <= 0) {
-                    spawnParticles(minion.x, minion.y, "#7dff9b", 12);
+                    spawnParticles(minion.x, minion.y, PAL.moss3, 12);
                     const idx = state.boss.minions.indexOf(minion);
                     if (idx >= 0) state.boss.minions.splice(idx, 1);
                     if (state.boss) {
                         state.boss.hp -= 10;
                         state.boss.flash = 1;
-                        spawnFloatingText(state.boss.x, state.boss.y - 40, "召唤物死亡反噬！", "#ff4444");
+                        spawnFloatingText(state.boss.x, state.boss.y - 40, "召唤物死亡反噬！", PAL.blood2);
                     }
                 }
             }
@@ -376,17 +379,17 @@ export function updateBalls() {
                 if (bo.bossType === "executor") {
                     if (ny > 0.3) {
                         bdmg = Math.max(1, Math.round(bdmg * 0.5));
-                        spawnFloatingText(bo.x, bo.y - bo.r - 26, "正面!", "#8899bb");
+                        spawnFloatingText(bo.x, bo.y - bo.r - 26, "正面!", PAL.mist1);
                     } else if (ny < -0.3) {
                         bdmg = Math.round(bdmg * 1.5);
-                        spawnFloatingText(bo.x, bo.y - bo.r - 26, "背击!", "#ffd700");
+                        spawnFloatingText(bo.x, bo.y - bo.r - 26, "背击!", PAL.gold3);
                     }
                 }
                 // 祭坛诅咒：伤害 -1
                 if (p.altarDmgP) bdmg = Math.max(1, bdmg - 1);
                 damageBoss(bdmg);
-                spawnRing(b.x, b.y, "rgba(255,120,80,0.85)");
-                spawnParticles(b.x, b.y, "#ff8866", 8);
+                spawnRing(b.x, b.y, PAL.ember3);
+                spawnParticles(b.x, b.y, PAL.ember3, 8);
             }
 
             // 祭坛碰撞（球可摧毁祭坛）
@@ -409,11 +412,11 @@ export function updateBalls() {
                         }
                         al.hp -= p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
                         al.flash = 1;
-                        spawnParticles(b.x, b.y, "#cc66ff", 4);
+                        spawnParticles(b.x, b.y, PAL.vio2, 4);
                         if (al.hp <= 0) {
-                            spawnParticles(al.x, al.y, "#cc66ff", 15);
+                            spawnParticles(al.x, al.y, PAL.vio2, 15);
                             bo.altars.splice(k, 1);
-                            spawnFloatingText(al.x, al.y - 20, "祭坛摧毁！", "#cc66ff");
+                            spawnFloatingText(al.x, al.y - 20, "祭坛摧毁！", PAL.vio2);
                         }
                     }
                 }
@@ -422,7 +425,7 @@ export function updateBalls() {
 
         // 球击毁弹幕
         destroyBulletsWithBall(b, state.bossBullets, "#ff6b9d");
-        destroyBulletsWithBall(b, state.enemyBullets, "#ffa94d");
+        destroyBulletsWithBall(b, state.enemyBullets, PAL.ember2);
 
         // Block collisions
         for (let j = blocks.length - 1; j >= 0; j--) {
@@ -506,7 +509,7 @@ export function updateBalls() {
                         b.y += (b.vy > 0 ? 1 : -1) * (overlapY + 1);
                     }
                 }
-                spawnParticles(b.x, b.y, "#ffffff", 3);
+                spawnParticles(b.x, b.y, PAL.bone1, 3);
                 playBlockHit();
                 onBallHits(b, bl.x + bl.w / 2);
             }
