@@ -1,5 +1,5 @@
 import { GAME_CONFIG } from "./config.js";
-import { W, H } from "./constants.js";
+import { W } from "./constants.js";
 import { state } from "./state.js";
 import { ctx } from "./canvas.js";
 import { PAL } from "./palette.js";
@@ -59,7 +59,7 @@ export function spawnRing(x, y, color) {
 }
 
 // 漂浮文字（得分、提示等）
-export function spawnFloatingText(x, y, text, color = "#ffd700") {
+export function spawnFloatingText(x, y, text, color = PAL.gold2) {
     if (state.floatingTexts.length >= 20) return;
     state.floatingTexts.push({ x, y, text, color, life: 1, vy: -1.4 });
 }

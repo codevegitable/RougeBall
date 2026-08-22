@@ -3,7 +3,7 @@
 // 这样 800×600 的画布看起来像 200×150 的像素画放大 4 倍。
 
 import { ctx } from "./canvas.js";
-import { PAL, PANEL, rgba } from "./palette.js";
+import { PAL, PANEL } from "./palette.js";
 
 // 逻辑像素尺寸：1 个"美术像素" = PX 个画布像素
 export const PX = 4;
@@ -54,31 +54,10 @@ export function pChamferFill(x, y, w, h, color, c = 2) {
     // 阶梯状斜角
     for (let i = 0; i < c; i++) {
         const off = i * PX;
-        const len = (c - i) * PX;
         ctx.fillRect(X + off, Y + cut - off - PX, PX, PX);
         ctx.fillRect(X + Wd - off - PX, Y + cut - off - PX, PX, PX);
         ctx.fillRect(X + off, Y + Ht - cut + off, PX, PX);
         ctx.fillRect(X + Wd - off - PX, Y + Ht - cut + off, PX, PX);
-        void len;
-    }
-}
-
-// 切角描边
-export function pChamferStroke(x, y, w, h, color, c = 2, t = 1) {
-    const X = snap(x), Y = snap(y), Wd = snapUp(w), Ht = snapUp(h);
-    const cut = c * PX;
-    const b = t * PX;
-    ctx.fillStyle = color;
-    ctx.fillRect(X + cut, Y, Wd - cut * 2, b);
-    ctx.fillRect(X + cut, Y + Ht - b, Wd - cut * 2, b);
-    ctx.fillRect(X, Y + cut, b, Ht - cut * 2);
-    ctx.fillRect(X + Wd - b, Y + cut, b, Ht - cut * 2);
-    for (let i = 0; i < c; i++) {
-        const o = i * PX;
-        ctx.fillRect(X + o, Y + cut - o - PX, PX, PX);
-        ctx.fillRect(X + Wd - o - PX, Y + cut - o - PX, PX, PX);
-        ctx.fillRect(X + o, Y + Ht - cut + o, PX, PX);
-        ctx.fillRect(X + Wd - o - PX, Y + Ht - cut + o, PX, PX);
     }
 }
 
@@ -115,21 +94,6 @@ const BAYER4 = [
     [3, 11, 1, 9],
     [15, 7, 13, 5],
 ];
-
-// 垂直方向双色抖动填充
-export function pDitherV(x, y, w, h, top, bottom) {
-    const X = snap(x), Y = snap(y), Wd = snapUp(w), Ht = snapUp(h);
-    const rows = Ht / PX;
-    const cols = Wd / PX;
-    for (let r = 0; r < rows; r++) {
-        const t = rows <= 1 ? 0 : r / (rows - 1);
-        for (let c = 0; c < cols; c++) {
-            const th = (BAYER4[r & 3][c & 3] + 0.5) / 16;
-            ctx.fillStyle = t > th ? bottom : top;
-            ctx.fillRect(X + c * PX, Y + r * PX, PX, PX);
-        }
-    }
-}
 
 // 单色抖动遮罩：用于半透明感而不用 alpha
 export function pDitherMask(x, y, w, h, color, density = 0.5) {
@@ -173,6 +137,31 @@ export function pRing(cx, cy, r, color, t = 1) {
             ctx.fillRect((gx - outer) * C, (gy + dy) * C, wLeft * C, C);
             ctx.fillRect((gx + inner + 1) * C, (gy + dy) * C, wLeft * C, C);
         }
+    }
+}
+
+// ── 弹幕形体：圆盘 / 菱形 / 方块 ────────────────────────
+// 与 pCircle 的区别在定位精度：pCircle 把圆心吸附到 4px 网格，而弹幕以 2~3px/帧
+// 移动，吸附会让轨迹在网格上跳动。这里圆心按 1px 取整（轨迹平滑），只把形状
+// 按 PX 量化，既保住像素观感又不抖。
+//
+// 尺寸语义：直径 = snap(2r)，即 round(2r/PX) 个美术像素。连续传 r、r-2、r-4
+// 能得到 4px 递进的三层，可稳定叠出「暗轮廓 → 主体 → 亮内芯」而不互相吃掉。
+export function pBlob(cx, cy, r, color, shape = "circle") {
+    const n = Math.max(2, Math.round((r * 2) / PX));   // 直径（格数）
+    const half = n / 2;
+    const X = Math.round(cx), Y = Math.round(cy);
+    ctx.fillStyle = color;
+    if (shape === "square") {
+        ctx.fillRect(X - (n * PX) / 2, Y - (n * PX) / 2, n * PX, n * PX);
+        return;
+    }
+    for (let i = 0; i < n; i++) {
+        const dy = i - half + 0.5;                     // 行中心到圆心距离（格）
+        const w = shape === "diamond"
+            ? Math.max(1, Math.round((half - Math.abs(dy)) * 2))
+            : Math.max(1, Math.round(Math.sqrt(Math.max(0, half * half - dy * dy)) * 2));
+        ctx.fillRect(X - Math.round((w * PX) / 2), Y + (dy - 0.5) * PX, w * PX, PX);
     }
 }
 
@@ -248,20 +237,6 @@ export function pWrap(text, cx, y, maxW, lineH, color, opts = {}) {
     return ly;
 }
 
-// 测量换行后占用的行数，供布局预留空间
-export function pWrapLines(text, maxW, size = 13, bold = false) {
-    pFont(size, bold);
-    let line = "";
-    let n = 1;
-    for (const ch of String(text)) {
-        if (ch === "\n") { n++; line = ""; continue; }
-        const test = line + ch;
-        if (ctx.measureText(test).width > maxW && line.length > 0) { n++; line = ch; }
-        else line = test;
-    }
-    return n;
-}
-
 // ── 遮罩：界面弹出时压暗背景 ──────────────────────────────
 // 用有序抖动的实色网点，而不是半透明填充：alpha 混合会在遮罩色与
 // 背景色之间插值出大量调色板外的新颜色（实测可占画面 70%），
@@ -276,26 +251,6 @@ export function pScrim(density = 0.72, tint = PAL.ink0) {
         return;
     }
     pDitherMask(0, 0, w, h, tint, density);
-}
-
-// ── 伪辉光：像素风不用 shadowBlur，改用同心低密度抖动环 ──
-export function pGlow(cx, cy, r, color, steps = 2) {
-    for (let i = steps; i >= 1; i--) {
-        const rr = r + i * PX;
-        ctx.fillStyle = rgba(color, 0.16 * (1 - (i - 1) / (steps + 1)));
-        pCircleRaw(cx, cy, rr, ctx.fillStyle);
-    }
-}
-
-function pCircleRaw(cx, cy, r, color) {
-    const C = PX;
-    const gx = Math.round(cx / C), gy = Math.round(cy / C);
-    const gr = Math.max(1, Math.round(r / C));
-    ctx.fillStyle = color;
-    for (let dy = -gr; dy <= gr; dy++) {
-        const span = Math.floor(Math.sqrt(Math.max(0, gr * gr - dy * dy + 0.25)));
-        ctx.fillRect((gx - span) * C, (gy + dy) * C, (span * 2 + 1) * C, C);
-    }
 }
 
 // ── 位图图标：用 0/1 点阵绘制，彻底摆脱 emoji ──────────
@@ -333,56 +288,6 @@ export const SPR_HALF_HEART = [
     ".XLL..X",
     "..XL.X.",
     "...X...",
-];
-
-// 骷髅（Boss / 游戏结束）
-export const SPR_SKULL = [
-    ".XXXXX.",
-    "XLLLLLX",
-    "XDLLLDX",
-    "XLLLLLX",
-    ".XLXLX.",
-    "..XXX..",
-];
-
-// 星（稀有 / 解锁）
-export const SPR_STAR = [
-    "...X...",
-    "..XLX..",
-    "XXLLLXX",
-    ".XLLLX.",
-    "..XLX..",
-    ".X...X.",
-];
-
-// 书（图鉴）
-export const SPR_BOOK = [
-    "XXXXXXX",
-    "XLLXLLX",
-    "XLLXLLX",
-    "XLLXLLX",
-    "XLLXLLX",
-    "XXXXXXX",
-];
-
-// 齿轮（设置）
-export const SPR_GEAR = [
-    "..X.X..",
-    ".XXXXX.",
-    "XXLLLXX",
-    "XLL.LLX",
-    "XXLLLXX",
-    ".XXXXX.",
-    "..X.X..",
-];
-
-// 锁链（封印槽位）
-export const SPR_CHAIN = [
-    ".XXX...",
-    "XL.LX..",
-    ".XXXXX.",
-    "..XL.LX",
-    "..XXXX.",
 ];
 
 export function heartMap(base, light, dark) {

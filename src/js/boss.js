@@ -6,7 +6,7 @@ import { screenShake, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
 import { playBossHit, playBossShoot, playBossDeath, playVictory, playPlayerHit, playWallHit } from "./sound.js";
 import { BOSS_CANDIDATES, BOSS_TIER_INDEX } from "./data/bosses.js";
 import { PAL, rgba } from "./palette.js";
-import { PX, pRectRaw, pRing, pBar, pText, pDitherMask, pCircle } from "./pixel.js";
+import { PX, pRectRaw, pRing, pBar, pText, pDitherMask, pCircle, pBlob } from "./pixel.js";
 import { HUD_TOP_H } from "./layout.js";
 import { drawIcon } from "./icons.js";
 import { drawBossSprite, drawBossCrown } from "./boss_art.js";
@@ -315,7 +315,7 @@ function spawnMinionForType(boss) {
         roll -= w;
         if (roll <= 0) { picked = kind; break; }
     }
-    const colors = { healer: PAL.moss3, poison: "#b26bff", vine: "#5aa7ff", repair: PAL.moss3, shield: PAL.gold3, bomber: "#ff6644" };
+    const colors = { healer: PAL.moss3, poison: PAL.vio2, vine: PAL.arc2, repair: PAL.moss3, shield: PAL.gold3, bomber: PAL.ember2 };
     const bossId = state.boss;
     boss.minions.push({
         x: mx, y: my, r: 14, hp: 20 + boss.tier * 10,
@@ -347,8 +347,8 @@ function updateMinions(boss, dt) {
             if (m.poisonTimer <= 0) {
                 m.poisonTimer = 120;
                 const r = 40;
-                state.bossDangerZones.push({ x: boss.x + (m.x - boss.x) * 0.25, y: m.y + 20, r, life: 180, type: "hazard", color: "#b26bff", _poison: true });
-                spawnFloatingText(m.x, m.y - 20, "毒雾扩散！", "#b26bff");
+                state.bossDangerZones.push({ x: boss.x + (m.x - boss.x) * 0.25, y: m.y + 20, r, life: 180, type: "hazard", color: PAL.vio2, _poison: true });
+                spawnFloatingText(m.x, m.y - 20, "毒雾扩散！", PAL.vio3);
             }
         }
         // 藤蔓：束缚挡板（短暂移速降低）
@@ -370,7 +370,7 @@ function updateMinions(boss, dt) {
                     state.invulnTimer = 100;
                     loseLife(1);
                     screenShake(10, 200);
-                    spawnFloatingText(m.x, m.y, "爆炸！", "#ff6644");
+                    spawnFloatingText(m.x, m.y, "爆炸！", PAL.ember3);
                 }
                 continue;
             }
@@ -654,7 +654,7 @@ function updateBossBullets() {
         if (b.x + b.r >= hr.x && b.x - b.r <= hr.x + hr.w && b.y + b.r >= hr.y && b.y - b.r <= hr.y + hr.h) {
             bullets.splice(i, 1);
             onPaddleHit(b);
-            spawnParticles(b.x, b.y, "#ff6b9d", 8);
+            spawnParticles(b.x, b.y, bulletColor(b), 8);
         }
     }
 }
@@ -850,18 +850,69 @@ export function drawBossBar() {
     }
 }
 
-// Boss 弹幕：菱形像素弹，比圆点更易在混战中辨识
+// Boss 弹幕：实心菱形弹。
+//
+// 三个此前的可读性问题，逐个对应修复：
+//  1. 太小 —— 原本只画十字骨架（横竖各 PX*2 厚），r=6 的弹在混战里只有约
+//     10px 的亮部。现在画实心菱形并把最小视觉半径提到 PX*3，亮部约 24px。
+//  2. 白色难分辨 —— 原本核心恒为 bone1(#f4eee2)、主体为 blood3(#f07d84)，
+//     在骨白文字、金色球、亮色地板前都糊成一片。现在按弹种取高饱和暖色，
+//     白色只留作 1px 的高光点缀，不再充当主色。
+//  3. 弹种无从判断 —— homing/split/wave 与普通弹外观完全相同。现在各有配色
+//     与标记（追踪=紫环、分裂=十字芯、波动=侧翼点）。
+//
+// 分层顺序：暗轮廓 → 主体 → 亮内芯 → 高光，保证任何背景上都有明暗边界。
+// 四个弹种各占一个色系，且都不以骨白为主色——骨白是文字与主球的颜色，
+// 弹幕再用白就会和它们糊在一起（这正是"白色子弹不易分辨"的来源）。
+const BULLET_KIND = {
+    normal: { edge: PAL.ember0, body: PAL.ember2, core: PAL.ember3 },
+    homing: { edge: PAL.vio0, body: PAL.vio2, core: PAL.vio3 },
+    split: { edge: PAL.blood0, body: PAL.blood2, core: PAL.blood3 },
+    wave: { edge: PAL.arc0, body: PAL.arc2, core: PAL.arc3 },
+};
+
+function bulletKind(b) {
+    if (b.homing) return BULLET_KIND.homing;
+    if (b.splitAt > 0) return BULLET_KIND.split;
+    if (b.wave) return BULLET_KIND.wave;
+    return BULLET_KIND.normal;
+}
+
+// 供 physics.js 生成击毁碎屑用，保证碎屑与弹体同色
+export function bulletColor(b) {
+    return bulletKind(b).body;
+}
+
 export function drawBossBullets() {
     for (const b of state.bossBullets) {
-        const r = Math.max(PX * 2, Math.round(b.r / PX) * PX);
-        // 外层轮廓
-        pRectRaw(b.x - r, b.y - PX, r * 2, PX * 2, PAL.ink0);
-        pRectRaw(b.x - PX, b.y - r, PX * 2, r * 2, PAL.ink0);
-        // 主体
-        pRectRaw(b.x - r + PX, b.y - PX / 2, r * 2 - PX * 2, PX, PAL.blood3);
-        pRectRaw(b.x - PX / 2, b.y - r + PX, PX, r * 2 - PX * 2, PAL.blood3);
-        // 核心
-        pRectRaw(b.x - PX, b.y - PX, PX * 2, PX * 2, PAL.bone1);
+        const k = bulletKind(b);
+        // 视觉半径下限 9px（直径 ~20px）。碰撞半径只有 5~6，按碰撞半径画必然
+        // 小到看不清；放大的部分是外圈暗轮廓与光晕，亮色主体仍贴着碰撞体，
+        // 玩家据主体判断走位不会吃亏。
+        // 菱形只有外接方形一半的面积，同样半径下亮部远小于方形弹，
+        // 因此下限取 14px（直径 28px），实测亮部约 400px，混战中足够醒目。
+        const r = Math.max(14, b.r * 2);
+        pBlob(b.x, b.y, r + PX, PAL.ink0, "diamond");   // 暗轮廓：任何背景都压出边界
+        pBlob(b.x, b.y, r, k.body, "diamond");
+        // 内芯只缩 1 格：菱形每缩一格就掉两圈面积，缩 2 格会塌成单像素，
+        // 亮色内芯等于没画（实测只剩 16px）。
+        pBlob(b.x, b.y, r - PX, k.core, "diamond");
+        pRectRaw(b.x - PX / 2, b.y - PX / 2, PX, PX, PAL.bone1);  // 中心高光点（仅 1 格）
+
+        // 弹种标记：用形状而非仅靠颜色区分，色盲玩家同样能读。
+        // 标记一律取本弹种的亮色档，不用骨白——避免又变成"白弹"。
+        // 所有标记都画在暗轮廓以内，否则亮点会在浅色地板上脱离弹体单独漂浮。
+        if (b.homing) {
+            const on = Math.floor(b.age / 6) % 2 === 0;   // 脉动环："会跟着你走"
+            pRing(b.x, b.y, r + PX * 2, on ? PAL.vio3 : PAL.vio1, 1);
+        } else if (b.splitAt > 0) {
+            // 横贯十字："会炸成多发"
+            pRectRaw(b.x - r + PX, b.y - PX / 2, r * 2 - PX * 2, PX, k.core);
+        } else if (b.wave) {
+            // 两侧翼点：走蛇形
+            pRectRaw(b.x - r + PX, b.y - PX / 2, PX, PX, k.core);
+            pRectRaw(b.x + r - PX * 2, b.y - PX / 2, PX, PX, k.core);
+        }
     }
 }
 
@@ -887,12 +938,26 @@ export function drawBossDangerZones() {
     }
 }
 
-// 方块射出的子弹：小型像素箭头，朝下
+// 方块射出的子弹：方形弹丸 + 尾迹。
+// 原实现 r=5 经 round(5/4)*4 量化成 4，整颗弹只有 8×8 且大半是黑边，
+// 亮部不到 6px——这就是"子弹太小看不清"的直接原因。
+// 现在视觉半径下限 PX*2.5（约 20px footprint），并用方形轮廓与 Boss 的
+// 菱形弹拉开区分：玩家扫一眼就知道威胁来自方块还是 Boss。
 export function drawEnemyBullets() {
     for (const b of state.enemyBullets) {
-        const r = Math.max(PX, Math.round(b.r / PX) * PX);
-        pRectRaw(b.x - r, b.y - r, r * 2, r * 2, PAL.ink0);
-        pRectRaw(b.x - r + PX / 2, b.y - r + PX / 2, r * 2 - PX, r * 2 - PX, PAL.ember2);
-        pRectRaw(b.x - PX / 2, b.y, PX, r, PAL.ember3);
+        const r = Math.max(10, b.r * 2);   // 视觉半径下限 10px → 直径 20px
+
+        // 运动尾迹：沿速度反方向拖两段，让高速小物体在视觉上"拉长"更易追踪。
+        // 偏移必须大于弹体半径 + 轮廓厚度，否则尾迹会整段被弹体自己的暗轮廓盖掉。
+        const len = Math.hypot(b.vx, b.vy) || 1;
+        const ux = b.vx / len, uy = b.vy / len;
+        const off = r + PX * 2;
+        pBlob(b.x - ux * (off + PX * 3), b.y - uy * (off + PX * 3), r * 0.35, PAL.ember0, "square");
+        pBlob(b.x - ux * off, b.y - uy * off, r * 0.6, PAL.ember1, "square");
+
+        pBlob(b.x, b.y, r + PX, PAL.ink0, "square");     // 暗轮廓
+        pBlob(b.x, b.y, r, PAL.ember2, "square");
+        pBlob(b.x, b.y, r - PX, PAL.ember3, "square");
+        pRectRaw(b.x - PX / 2, b.y - PX / 2, PX, PX, PAL.bone1);  // 中心高光
     }
 }

@@ -6,7 +6,7 @@
 import { W, H } from "./constants.js";
 import { state } from "./state.js";
 import { ctx } from "./canvas.js";
-import { PAL, rgba } from "./palette.js";
+import { PAL } from "./palette.js";
 import { PX } from "./pixel.js";
 import { mulberry32 } from "./utils.js";
 import { FIELD_TOP } from "./layout.js";
@@ -139,5 +139,3 @@ function drawDust() {
     }
 }
 
-// 兼容旧调用名
-export const drawStars = drawDungeon;

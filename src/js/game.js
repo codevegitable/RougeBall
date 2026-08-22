@@ -34,8 +34,8 @@ import { updateStars } from "./stars.js";
 import { spawnFloatingText } from "./fx.js";
 import { playLaunch, playLevelComplete, playEventOpen, playVictory } from "./sound.js";
 import { RARITY } from "./constants.js";
-import { rollCurse, rollBossCurse, rollCursePool, applyCurseStack, CURSES_MAP, CURSES, BOSS_CURSES } from "./curses.js";
-import { getSelectedSkin, skinDef, SKIN_START_SKILLS } from "./unlocks.js";
+import { rollCursePool, applyCurseStack, BOSS_CURSES } from "./curses.js";
+import { getSelectedSkin, skinDef } from "./unlocks.js";
 import { PAL } from "./palette.js";
 
 // ─── 存档 ─────────────────────────────────────────────────
@@ -324,7 +324,7 @@ function setupBossCurseSelect() {
     state.curseChoices = bossCurses.slice(0, Math.max(1, 3 - penalty));
     state.curseStrength = 1;
     state.gameState = STATE.CURSE_SELECT;
-    spawnFloatingText(400, 200, "选择一项 Boss 诅咒", "#ff44aa");
+    spawnFloatingText(400, 200, "选择一项 Boss 诅咒", PAL.blood3);
 }
 
 function setupCurseSelect() {
@@ -412,7 +412,7 @@ export function startBossFight() {
     state.gameState = STATE.PLAYING;
     if (state.player.entryBonus > 0) addScore(state.player.entryBonus);
     playEventOpen();
-    spawnFloatingText(400, 200, "⚠ BOSS 来袭 ⚠", "#ff8899");
+    spawnFloatingText(400, 200, "BOSS 来袭", PAL.blood3);
     saveProgress();
 }
 

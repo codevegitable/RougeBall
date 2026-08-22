@@ -85,10 +85,6 @@ export function rollCursePool(level = 1) {
     });
 }
 
-export function rollBossCurse() {
-    return BOSS_CURSES[Math.floor(Math.random() * BOSS_CURSES.length)];
-}
-
 export function applyCurseStack(curseId, count, p) {
     const def = CURSES_MAP[curseId];
     if (!def) return;

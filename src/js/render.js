@@ -122,6 +122,12 @@ export function drawBlocks() {
 
         const tier = BLOCK_TIERS[Math.min(bl.maxHp - 1, 3)];
 
+        // 落地阴影：所有方块统一在右下投一格暗影。
+        // 地板砖本身有明暗变化，仅靠 1px 黑轮廓不足以把方块从背景里拎出来；
+        // 一致方向的阴影能建立"方块浮在地板之上"的图底关系。
+        pRect(x + PX, y + h, w - PX, PX, PAL.ink0);
+        pRect(x + w, y + PX, PX, h - PX, PAL.ink0);
+
         // 轮廓
         pRect(x, y, w, h, PAL.ink0);
         // 主体
@@ -157,24 +163,44 @@ export function drawBlocks() {
     }
 }
 
-// 不可击碎：铆钉铁块
+// 不可击碎：铆钉铁块。
+//
+// 原实现主体用 stone1、暗面用 stone0——而地板主题在 11~40 层正好把这两色
+// 当作砖面与砖缘（stars.js 的 floorAlt/edgeLight），于是障碍物和背景同色，
+// 完全分不出来。现在改成"暗芯 + 亮金属边"的高对比配色：
+//   芯 ink0/ink1 比任何地板砖都暗，边 stone3/mist0 比最亮的地板砖(stone1)都亮，
+// 无论哪套主题，方块边界都有明暗落差。再加警示斜纹强化"打不破"的语义。
 function drawMetalBlock(x, y, w, h) {
-    pRect(x, y, w, h, PAL.ink0);
-    pRect(x + PX, y + PX, w - PX * 2, h - PX * 2, PAL.stone1);
-    pRect(x + PX, y + PX, w - PX * 2, PX, PAL.stone3);
-    pRect(x + PX, y + PX, PX, h - PX * 2, PAL.stone2);
-    pRect(x + PX, y + h - PX * 2, w - PX * 2, PX, PAL.stone0);
-    pRect(x + w - PX * 2, y + PX, PX, h - PX * 2, PAL.stone0);
-    // 四角铆钉
+    // 落地阴影：把铁块从地板上"抬"起来，进一步拉开图底关系
+    pRect(x + PX, y + h, w - PX, PX, PAL.ink0);
+
+    pRect(x, y, w, h, PAL.ink0);                                   // 硬轮廓
+    // 暗芯用 stone0：它比最亮的地板砖(stone1)暗、比最暗的主题地板(ink1/ink2)亮，
+    // 因此在五套主题下都与地板存在亮度差。用 ink1 会与 41 层主题的砖面同色。
+    pRect(x + PX, y + PX, w - PX * 2, h - PX * 2, PAL.stone0);     // 暗芯
+    pRect(x + PX, y + PX, w - PX * 2, PX, PAL.mist0);              // 顶部亮边
+    pRect(x + PX, y + PX, PX, h - PX * 2, PAL.stone3);             // 左侧亮边
+    pRect(x + PX, y + h - PX * 2, w - PX * 2, PX, PAL.stone0);     // 底部暗边
+    pRect(x + w - PX * 2, y + PX, PX, h - PX * 2, PAL.stone0);     // 右侧暗边
+
+    // 警示斜纹：45° 交替，只画在中段，避免盖掉铆钉与边框
+    const stripeTop = y + PX * 2;
+    const stripeH = h - PX * 4;
+    if (stripeH >= PX * 2) {
+        for (let sx = PX * 3; sx < w - PX * 3; sx += PX * 4) {
+            for (let sy = 0; sy < stripeH; sy += PX) {
+                const off = sx + (sy / PX) * PX;
+                if (off >= w - PX * 3) continue;
+                pRect(x + off, stripeTop + sy, PX, PX, PAL.stone2);
+            }
+        }
+    }
+
+    // 四角铆钉：亮点，铁件质感
     const rv = [[PX * 2, PX * 2], [w - PX * 3, PX * 2], [PX * 2, h - PX * 3], [w - PX * 3, h - PX * 3]];
     for (const [dx, dy] of rv) {
-        pRect(x + dx, y + dy, PX, PX, PAL.stone3);
+        pRect(x + dx, y + dy, PX, PX, PAL.bone0);
     }
-    // 中心 X 刻痕，暗示"打不破"
-    const cx = snap(x + w / 2), cy = snap(y + h / 2);
-    pRect(cx - PX, cy - PX, PX * 2, PX * 2, PAL.stone0);
-    pRect(cx - PX * 2, cy - PX * 2, PX, PX, PAL.stone3);
-    pRect(cx + PX, cy + PX, PX, PX, PAL.stone3);
 }
 
 // 裂纹：确定性伪随机，保证同一方块裂纹稳定不闪烁

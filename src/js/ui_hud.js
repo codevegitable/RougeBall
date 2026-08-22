@@ -8,7 +8,7 @@ import { state } from "./state.js";
 import { ctx } from "./canvas.js";
 import { PAL, RARITY_PAL } from "./palette.js";
 import {
-    PX, snap, pRect, pStroke, pPanel, pSlot, pText, pTextShadow, pBar, pSprite,
+    PX, snap, pRect, pStroke, pText, pTextShadow, pSprite,
     SPR_HEART, SPR_HALF_HEART, heartMap,
 } from "./pixel.js";
 import {
@@ -16,7 +16,6 @@ import {
     STATUS_RIGHT, STATUS_Y, STATUS_MAX,
 } from "./layout.js";
 import { REWARD_MAP } from "./rewards.js";
-import { CURSES_MAP } from "./curses.js";
 import { drawIcon } from "./icons.js";
 
 export function drawUI() {

@@ -33,7 +33,7 @@ export const REWARD_DATA = [
     { id: "jade_stars", name: "翡翠繁星", icon: "🟢", rarity: "uncommon", type: "skill", cooldown: 30, tierLock: 0, desc: "发射 3 个额外球" },
     { id: "jade_shield", name: "翡翠之盾", icon: "🛡️", rarity: "uncommon", type: "skill", cooldown: 35, tierLock: 0, desc: "6 秒内受击反弹 5 点伤害" },
     { id: "crimson_storm", name: "猩红风暴", icon: "🔴", rarity: "uncommon", type: "skill", cooldown: 30, tierLock: 1, desc: "5 秒内球分裂出 2 个额外球" },
-    { id: "blood_siphon", name: "血之吸吮", icon: "🩸", rarity: "uncommon", type: "skill", cooldown: 40, tierLock: 1, desc: "8 秒内击碎方块回复 0.3 命" },
+    { id: "blood_siphon", name: "血之吸吮", icon: "🩸", rarity: "uncommon", type: "skill", cooldown: 40, tierLock: 1, desc: "8 秒内每击碎 5 个方块回复 0.1 命" },
     { id: "golden_shield", name: "黄金之盾", icon: "🟡", rarity: "rare", type: "skill", cooldown: 40, tierLock: 2, desc: "6 秒内无敌" },
     { id: "wealth_rain", name: "王国资产", icon: "💰", rarity: "rare", type: "skill", cooldown: 30, tierLock: 2, desc: "立即获得 200 分" },
     // ═══ 皮肤开场技能 ═══
@@ -48,7 +48,7 @@ export const REWARD_DATA = [
     { id: "echo_hit", name: "回音击", icon: "🔔", rarity: "common", type: "ability", maxStacks: 2, desc: "击碎方块时弹片对周围随机方块造成 1 点伤害" },
     { id: "split_ball", name: "分裂之球", icon: "🧬", rarity: "rare", type: "ability", maxStacks: 1, desc: "球每撞击 6 次方块便分裂出 1 个新球" },
     { id: "bouncy_combo", name: "弹射连击", icon: "🛸", rarity: "rare", type: "ability", maxStacks: 1, desc: "球击碎方块后不会反弹，直接继续飞行" },
-    { id: "vampire", name: "死亡收割", icon: "🧛", rarity: "rare", type: "ability", maxStacks: 2, desc: "击碎方块时有 5% 概率恢复 1 条生命" },
+    { id: "vampire", name: "死亡收割", icon: "🧛", rarity: "rare", type: "ability", maxStacks: 2, desc: "击碎方块时有 2% 概率恢复 1 条生命" },
     { id: "gold_soul", name: "黄金之魂", icon: "🏆", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "所有来源的分数 ×2" },
     { id: "iron_will", name: "钢铁意志", icon: "🛐", rarity: "rare", type: "ability", maxStacks: 1, desc: "受到弹幕伤害时有 50% 概率格挡" },
     { id: "thorn_armor", name: "荆棘反甲", icon: "🌵", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "挡板被弹幕命中时，反弹对 Boss 造成 5 点伤害" },
@@ -59,13 +59,13 @@ export const REWARD_DATA = [
     // ═══ 新增奖励 ═══
     { id: "bounce_shield", name: "弹射护盾", icon: "🛡️", rarity: "uncommon", type: "ability", maxStacks: 1, desc: "被弹幕击中时 15% 概率反弹子弹" },
     { id: "swift_move", name: "疾风步", icon: "💨", rarity: "common", type: "bonus", maxStacks: 3, desc: "挡板响应速度 +15%" },
-    { id: "life_siphon", name: "生命虹吸", icon: "🩸", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "每击碎 5 个方块回复 0.3 命" },
+    { id: "life_siphon", name: "生命虹吸", icon: "🩸", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "每击碎 15 个方块回复 0.1 生命" },
     { id: "double_strike", name: "与我一战", icon: "⚡", rarity: "common", type: "bonus", maxStacks: 3, desc: "球伤害 +2，球速度 +5%" },
     { id: "lucky_charm", name: "幸运护符", icon: "🍀", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "稀有奖励概率 +5%" },
     // ═══ 解锁奖励 ═══
     { id: "guardian_core", name: "守护核心", icon: "🛡️", rarity: "rare", type: "ability", maxStacks: 1, tierLock: 0, desc: "每关开始获得 2 秒能量护盾" },
     { id: "greed_eye", name: "贪婪之眼", icon: "👁️", rarity: "uncommon", type: "ability", maxStacks: 2, tierLock: 0, desc: "击碎方块额外获得 +50% 分数" },
-    { id: "vampiric_gem", name: "吸血宝石", icon: "💎", rarity: "rare", type: "ability", maxStacks: 1, tierLock: 1, desc: "击碎方块时 8% 概率恢复 1 生命" },
+    { id: "vampiric_gem", name: "吸血宝石", icon: "💎", rarity: "rare", type: "ability", maxStacks: 1, tierLock: 1, desc: "击碎方块时 4% 概率恢复 1 生命" },
     { id: "rapid_cooling", name: "极速制冷", icon: "❄️", rarity: "uncommon", type: "bonus", maxStacks: 3, tierLock: 1, desc: "技能冷却额外 -15%" },
     { id: "titan_ball", name: "泰坦之球", icon: "🌍", rarity: "rare", type: "ability", maxStacks: 1, tierLock: 2, desc: "球体积 +60%，撞击方块伤害 +30%" },
     { id: "blessed_start", name: "祝福开局", icon: "✨", rarity: "rare", type: "bonus", maxStacks: 1, tierLock: 2, desc: "每关开始额外获得 2 个球" },
@@ -77,6 +77,3 @@ export const REWARD_DATA = [
     { id: "treasury", name: "王之财宝", icon: "👑", rarity: "rare", type: "bonus", maxStacks: 2, bossOnly: true, applyId: "score2000", desc: "立即获得 200 分，所有分数获取 +20%" },
     { id: "godseed", name: "神速之星", icon: "🌠", rarity: "rare", type: "bonus", maxStacks: 2, bossOnly: true, desc: "球速度 -15%，球伤害 +1" },
 ];
-
-// 奖励掉落权重基准（%）
-export const RARITY_WEIGHTS = { common: 60, uncommon: 30, rare: 10 };

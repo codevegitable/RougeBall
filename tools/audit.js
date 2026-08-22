@@ -184,6 +184,9 @@ function run() {
         check(`${name}不与挡板行相交 (挡板 ${padY0}-${padY1}, 区域 ${z[1]}-${z[3]})`, !overlap);
     }
 
+    bulletChecks(nearBlackRatio);
+    blockContrastChecks();
+
     // 3. 各弹窗
     state.levelChoices = REWARDS.slice(0, 3);
     state.rewardTitle = "获得奖励";
@@ -244,6 +247,135 @@ function run() {
 }
 
 // 用界面自己记录的命中矩形中心点做回归测试，确保绘制与命中一致
+// ── 弹幕可读性 ──────────────────────────────────────────
+// 三项判据，对应三个已修复的缺陷：
+//  1. 亮部足够大：子弹太小看不清
+//  2. 不以白色为主色：白弹在骨白文字/金球/亮地板前分辨不出
+//  3. 有暗轮廓：任何背景上都能压出边界
+function bulletChecks(nearBlackRatio) {
+    // 统计一小块区域内某组颜色的像素数
+    const countColors = (data, hexes, x0, y0, x1, y1) => {
+        const want = new Set(hexes.map((h) => {
+            const n = parseInt(h.slice(1), 16);
+            return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+        }));
+        let hit = 0;
+        for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) {
+            for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) {
+                const o = (y * W + x) * 4;
+                if (want.has(`${data[o]},${data[o + 1]},${data[o + 2]}`)) hit++;
+            }
+        }
+        return hit;
+    };
+
+    const CX = 400, CY = 300, BOX = 60;
+    const box = [CX - BOX, CY - BOX, CX + BOX, CY + BOX];
+
+    // ① 方块子弹
+    state.blocks = [];
+    state.bossBullets = [];
+    state.enemyBullets = [{ x: CX, y: CY, vx: 0, vy: 2.2, r: 5 }];
+    render();
+    let d = snapshot();
+    let bright = countColors(d, [PAL.ember1, PAL.ember2, PAL.ember3], ...box);
+    check(`方块子弹亮部 ${bright}px >= 150（修复前约 36px）`, bright >= 150);
+    check("方块子弹有暗轮廓", countColors(d, [PAL.ink0], ...box) >= 40);
+
+    // ② Boss 弹幕：四个弹种都要够大、够暗轮廓，且不以白色为主
+    const kinds = [
+        ["普通弹", { homing: false, splitAt: 0, wave: null }, [PAL.ember1, PAL.ember2, PAL.ember3]],
+        ["追踪弹", { homing: true, splitAt: 0, wave: null }, [PAL.vio1, PAL.vio2, PAL.vio3]],
+        ["分裂弹", { homing: false, splitAt: 46, wave: null }, [PAL.blood1, PAL.blood2, PAL.blood3]],
+        ["波动弹", { homing: false, splitAt: 0, wave: { phase: 0, amp: 26, freq: 0.06, bx: CX, by: CY, dirX: 0, dirY: 1 } }, [PAL.arc1, PAL.arc2, PAL.arc3]],
+    ];
+    state.enemyBullets = [];
+    for (const [name, props, colors] of kinds) {
+        state.bossBullets = [{ x: CX, y: CY, vx: 0, vy: 2, r: 6, age: 12, ...props }];
+        render();
+        d = snapshot();
+        const lit = countColors(d, colors, ...box);
+        const white = countColors(d, [PAL.bone1, PAL.white], ...box);
+        check(`${name}亮部 ${lit}px >= 200（修复前约 60px）`, lit >= 200);
+        check(`${name}非白色主导 (白 ${white}px < 亮 ${lit}px 的 25%)`, white < lit * 0.25);
+        check(`${name}有暗轮廓`, countColors(d, [PAL.ink0], ...box) >= 40);
+    }
+
+    // ③ 弹种可区分：任意两弹种的主色集合不得相同
+    const sig = kinds.map(([, , c]) => c.join("|"));
+    check("四个弹种配色互不相同", new Set(sig).size === 4);
+
+    state.bossBullets = [];
+    state.enemyBullets = [];
+}
+
+// ── 障碍物与背景的区分度 ────────────────────────────────
+// 缺陷根因：不可击碎方块原本用 stone1 主体 + stone0 暗面，而 11~40 层的地板
+// 主题正好用这两色当砖面/砖缘（stars.js），于是方块与背景同色。
+// 判据：逐主题渲染，方块内部与紧邻地板的平均亮度差必须够大。
+function blockContrastChecks() {
+    const meanL = (data, x0, y0, x1, y1) => {
+        let sum = 0, n = 0;
+        for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) {
+            for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) {
+                const o = (y * W + x) * 4;
+                sum += 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
+                n++;
+            }
+        }
+        return n ? sum / n : 0;
+    };
+
+    const BX = 300, BY = 260, BW = 64, BH = 22;
+    // 每 10 层换一次地板主题，逐主题验证
+    for (const lv of [1, 11, 21, 31, 41]) {
+        state.player.level = lv;
+        state.bossBullets = [];
+        state.enemyBullets = [];
+
+        // 先只画地板，量出该主题下方块位置的地板亮度
+        state.blocks = [];
+        render();
+        const floorL = meanL(snapshot(), BX, BY, BX + BW, BY + BH);
+
+        // 再放一个不可击碎方块，量它的内部亮度
+        state.blocks = [{ x: BX, y: BY, w: BW, h: BH, hp: 1, maxHp: 1, indestructible: true }];
+        render();
+        const d = snapshot();
+        const innerL = meanL(d, BX + 4, BY + 4, BX + BW - 4, BY + BH - 4);
+        let max = 0;
+        for (let y = BY + 4; y < BY + BH - 4; y++) {
+            for (let x = BX + 4; x < BX + BW - 4; x++) {
+                const o = (y * W + x) * 4;
+                const L = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2];
+                if (L > max) max = L;
+            }
+        }
+        // 判据是"能不能分辨"，不预设方块比地板更暗还是更亮：
+        //  ① 内部平均亮度与地板拉开 >20（整体色块可区分）
+        //  ② 内部存在明显亮于地板的高光（铆钉/亮边，提供形状线索）
+        check(`B${lv} 障碍物内部 ${innerL.toFixed(0)} 与地板 ${floorL.toFixed(0)} 亮度差 ${Math.abs(innerL - floorL).toFixed(0)} > 20`,
+            Math.abs(innerL - floorL) > 20);
+        check(`B${lv} 障碍物高光 ${max.toFixed(0)} > 地板 ${floorL.toFixed(0)} + 25`, max > floorL + 25);
+    }
+
+    // 可击碎方块：四个血量档都要与地板拉开亮度
+    state.player.level = 21;   // 最亮的地板主题（floor: stone0）
+    for (let hp = 1; hp <= 4; hp++) {
+        state.blocks = [];
+        render();
+        const floorL = meanL(snapshot(), BX, BY, BX + BW, BY + BH);
+        state.blocks = [{ x: BX, y: BY, w: BW, h: BH, hp, maxHp: hp, indestructible: false }];
+        render();
+        const blockL = meanL(snapshot(), BX + 6, BY + 6, BX + BW - 6, BY + BH - 6);
+        check(`${hp}HP 方块与地板亮度差 ${Math.abs(blockL - floorL).toFixed(0)} > 20`,
+            Math.abs(blockL - floorL) > 20);
+    }
+
+    state.player.level = 1;
+    state.blocks = [];
+}
+
 function centerHit(name, drawFn, hitFn, pick) {
     drawFn();
     const r = pick();

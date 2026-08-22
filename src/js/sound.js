@@ -23,10 +23,6 @@ export function toggleSound() {
     return GAME_CONFIG.sound.enabled;
 }
 
-export function isSoundEnabled() {
-    return GAME_CONFIG.sound.enabled;
-}
-
 // ─── 合成器基础函数 ───────────────────────────────────────
 function tone({ freq, endFreq = null, type = "sine", dur = 0.12, vol = 0.4, delay = 0 }) {
     if (!audioCtx || !GAME_CONFIG.sound.enabled) return;
@@ -91,12 +87,6 @@ export function playBlockBreak() {
 
 export function playBallLost() {
     tone({ freq: 420, endFreq: 90, type: "sawtooth", dur: 0.3, vol: 0.22 });
-}
-
-export function playSkillSelect() {
-    [523.25, 659.25, 783.99].forEach((f, i) =>
-        tone({ freq: f, type: "triangle", dur: 0.14, vol: 0.3, delay: i * 0.07 })
-    );
 }
 
 export function playLevelComplete() {

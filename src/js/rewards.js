@@ -146,7 +146,7 @@ export function recalcStats() {
     p.ballSpeedMul = Math.pow(0.88, n("slow_ball")) * Math.pow(1.05, n("double_strike"));
     p.paddleBonus = (n("wider_paddle") * 0.25 + n("giant_paddle") * 0.5) * rewardScale;
     p.scoreMul = Math.pow(2, n("gold_soul"));
-    p.healChance = 0.05 * n("vampire") + 0.08 * n("vampiric_gem");
+    p.healChance = 0.02 * n("vampire") + 0.04 * n("vampiric_gem");
     p.bossResist = n("iron_will") > 0 ? 0.5 : 0;
     p.thorns = 5 * n("thorn_armor");
     p.maxPiercing = n("piercing");
@@ -154,7 +154,7 @@ export function recalcStats() {
     p.skillCdMul = Math.pow(0.8, n("cd_reduction")) * Math.pow(0.85, n("rapid_cooling"));
     // 新增奖励
     p.moveSpeedMul = 1 + 0.15 * n("swift_move");
-    p.lifeSiphon = n("life_siphon") > 0 ? 0.3 * n("life_siphon") : 0;
+    p.lifeSiphon = n("life_siphon") > 0 ? 0.1 : 0;
     p.luckyBonus = 5 * n("lucky_charm");
     p.bounceShield = n("bounce_shield") > 0 ? 0.15 : 0;
     p.startBalls = 1 + n("dual_ball") + n("blessed_start") * 2;

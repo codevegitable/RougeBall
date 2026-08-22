@@ -5,7 +5,7 @@
 import { W, H, RARITY_META, MAX_SKILLS, TOTAL_LEVELS } from "./constants.js";
 import { state } from "./state.js";
 import { ctx } from "./canvas.js";
-import { PAL, RARITY_PAL, rgba } from "./palette.js";
+import { PAL, RARITY_PAL } from "./palette.js";
 import {
     PX, snap, pRect, pPanel, pSlot, pText, pTextShadow, pWrap,
     pScrim, pBar, pChamferFill,

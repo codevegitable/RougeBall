@@ -12,7 +12,7 @@
 // 600└────────────────────────────────┘
 //
 // 挡板在 y = H-40 = 560，落在底栏范围内，因此底栏只在两侧放内容，
-// 中间留出挡板活动的通道（见 BOTTOM_SAFE）。
+// 中间留出挡板活动的通道。
 
 import { W, H } from "./constants.js";
 
@@ -20,7 +20,6 @@ export const HUD_TOP_H = 48;
 
 // 游戏区（方块生成与球体活动的垂直范围）
 export const FIELD_TOP = HUD_TOP_H;
-export const FIELD_BOTTOM = H;
 
 // 底部技能槽区域。
 // 纵向位置有两个约束：槽位下方要放按键数字（+16px），且槽位底部不能
@@ -30,16 +29,11 @@ export const SKILL_SLOT = 44;
 export const SKILL_GAP = 6;
 export const SKILL_Y = H - 84;
 export const SKILL_X = 10;
-export const SKILL_LABEL_H = 16;
 
 // 状态标签（buff/诅咒）区域：右下角，与技能槽同一基线，同样避开挡板行
 export const STATUS_RIGHT = W - 10;
 export const STATUS_Y = SKILL_Y;
 export const STATUS_MAX = 4;
-
-// 挡板通道：底部中间区域不放任何 UI
-export const BOTTOM_SAFE_X1 = 150;
-export const BOTTOM_SAFE_X2 = W - 150;
 
 // 弹窗面板的统一宽度与居中辅助
 export const PANEL_W = 680;

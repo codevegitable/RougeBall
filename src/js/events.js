@@ -1,7 +1,6 @@
 import { RARITY, MAX_SKILLS } from "./constants.js";
 import { state, addScore, loseLife } from "./state.js";
 import { REWARDS, applyReward } from "./rewards.js";
-import { spawnFloatingText } from "./fx.js";
 import { playHeal, playEventGood, playEventBad } from "./sound.js";
 import { rollCurse, applyCurseStack, rollHeavyCurse, applyHeavyCurse } from "./curses.js";
 import { EVENT_DATA } from "./data/events.js";

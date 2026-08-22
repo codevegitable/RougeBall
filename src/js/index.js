@@ -9,8 +9,6 @@ import {
     resetPaddle,
     resetBall,
     startGameRun,
-    startBossFight,
-    loadLevel,
     proceedBossRush,
     continueFromSave,
     handleStartRewardPick,
@@ -50,7 +48,6 @@ import {
     hitPauseResume,
     hitPauseRestart,
     hitPauseQuit,
-    hitPenaltyCard,
     hitMenuCodexButton,
     hitMenuSkinButton,
     hitMenuSettingsButton,
@@ -61,7 +58,7 @@ import {
     hitCodexNext,
     hitCodexPrev,
 } from "./ui.js";
-import { initAudio, toggleSound, playVictory } from "./sound.js";
+import { initAudio, toggleSound } from "./sound.js";
 import { spawnFloatingText } from "./fx.js";
 import { setCodexTab, setCodexPage } from "./ui.js";
 import { getUnlocks, setSkin, skinDef, getSelectedSkin } from "./unlocks.js";

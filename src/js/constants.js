@@ -59,11 +59,9 @@ export const BOSS_LEVELS = new Set([15, 30, 45, 50]);
 export const isBossLevel = (n) => BOSS_LEVELS.has(n);
 
 // ─── 方块（默认基准，关卡内按层数动态缩放） ───────────────
-export const BLOCK_W = 64;
-export const BLOCK_H = 22;
+// 方块宽高由 levels.js 按层数计算，这里只保留网格间距与起始行
 export const BLOCK_GAP = 4;
 export const GRID_COLS = 10;
-export const GRID_X = (W - GRID_COLS * (BLOCK_W + BLOCK_GAP) + BLOCK_GAP) / 2;
 // 顶栏 48px + 16px 呼吸空间：确保方块不被 HUD 遮挡
 export const GRID_Y = 88;
 

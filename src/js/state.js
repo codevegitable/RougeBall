@@ -1,6 +1,7 @@
 import { STATE, W } from "./constants.js";
 import { playGameOver } from "./sound.js";
 import { registerScore } from "./unlocks.js";
+import { PAL } from "./palette.js";
 
 // 全局共享的可变游戏状态
 export const state = {
@@ -55,7 +56,7 @@ export function addScore(n) {
         const names = ["悲叹", "狂怒", "终焉"];
         state.floatingTexts.push({
             x: 400, y: 200, text: `解锁 tier ${tier + 1}：${names[tier]}`,
-            color: "#ffd700", life: 1, vy: -0.8,
+            color: PAL.gold2, life: 1, vy: -0.8,
         });
     }
 }

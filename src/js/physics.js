@@ -3,7 +3,7 @@ import { state, addScore, loseLife } from "./state.js";
 import { spawnParticles } from "./particles.js";
 import { screenShake, hitStop, flashPaddle, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
 import { spawnExtraBalls } from "./rewards.js";
-import { damageBoss } from "./boss.js";
+import { damageBoss, bulletColor } from "./boss.js";
 import {
     playWallHit,
     playPaddleHit,
@@ -172,19 +172,23 @@ function postBreakHooks(cx, cy, bl) {
         spawnFloatingText(cx, cy - 20, "生命 +1", PAL.moss3);
         playHeal();
     }
-    // 血之吸吮技能
+    // 血之吸吮技能（每击碎 5 个方块回复 0.1 命）
     if (p.siphonTimer > 0) {
-        p.lives += 0.3;
-        spawnFloatingText(cx, cy - 20, "生命 +0.3", PAL.blood3);
-        playHeal();
+        p._siphonSkillCounter = (p._siphonSkillCounter || 0) + 1;
+        if (p._siphonSkillCounter >= 5) {
+            p._siphonSkillCounter = 0;
+            p.lives += 0.1;
+            spawnFloatingText(cx, cy - 20, "生命 +0.1（技能）", PAL.blood3);
+            playHeal();
+        }
     }
-    // 生命虹吸：每击碎 5 个方块回复
+    // 生命虹吸：每击碎 15 个方块回复 0.1 命
     if (p.lifeSiphon > 0) {
         p._siphonCounter = (p._siphonCounter || 0) + 1;
-        if (p._siphonCounter >= 5) {
+        if (p._siphonCounter >= 15) {
             p._siphonCounter = 0;
-            p.lives += p.lifeSiphon;
-            spawnFloatingText(cx, cy - 20, `生命 +${p.lifeSiphon}`, PAL.moss3);
+            p.lives += 0.1;
+            spawnFloatingText(cx, cy - 20, `生命 +${0.1}`, PAL.moss3);
             playHeal();
         }
     }
@@ -423,8 +427,8 @@ export function updateBalls() {
             }
         }
 
-        // 球击毁弹幕
-        destroyBulletsWithBall(b, state.bossBullets, "#ff6b9d");
+        // 球击毁弹幕。碎屑取弹体自身配色（#ff6b9d 是调色板外的旧硬编码色）
+        destroyBulletsWithBall(b, state.bossBullets, null);
         destroyBulletsWithBall(b, state.enemyBullets, PAL.ember2);
 
         // Block collisions
@@ -445,7 +449,7 @@ export function updateBalls() {
             // 不可击碎方块
             if (bl.indestructible) {
                 if (!ghost) bounceSide(b, bl);
-                spawnParticles(b.x, b.y, "#556080", 3);
+                spawnParticles(b.x, b.y, PAL.stone3, 3);
                 playBlockHit();
                 break;
             }
@@ -530,12 +534,13 @@ function bounceSide(b, bl) {
     }
 }
 
+// color 传 null 时按弹种取色，碎屑与被打掉的那颗弹颜色一致
 function destroyBulletsWithBall(b, bulletArray, color) {
     for (let k = bulletArray.length - 1; k >= 0; k--) {
         const bl = bulletArray[k];
         if (Math.hypot(b.x - bl.x, b.y - bl.y) < b.radius + bl.r) {
             bulletArray.splice(k, 1);
-            spawnParticles(bl.x, bl.y, color, 4);
+            spawnParticles(bl.x, bl.y, color || bulletColor(bl), 4);
             addScore(5);
         }
     }

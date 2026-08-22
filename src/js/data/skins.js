@@ -22,6 +22,3 @@ export const SKIN_START_SKILLS = {
     swift_blade: { id: "swift_blade", name: "迅捷之刃", icon: "🔴", cooldown: 30, desc: "5 秒内球伤害 ×1.5" },
     golden_blessing: { id: "golden_blessing", name: "黄金祝福", icon: "🟡", cooldown: 35, desc: "立即获得 500 分，8 秒内分数 ×2" },
 };
-
-// 皮肤图标
-export const SKIN_ICONS = ["🎨", "🟢", "🔴", "🟡"];

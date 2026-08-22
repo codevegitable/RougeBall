@@ -432,4 +432,3 @@ export function drawIcon(name, cx, cy, scale = 2, color = PAL.bone1, label = "")
     }
 }
 
-export const ICON_NAMES = Object.keys(G);
