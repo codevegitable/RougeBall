@@ -14,6 +14,7 @@ import { render } from "../src/js/render.js";
 import { initStars } from "../src/js/stars.js";
 import { initPixelMode } from "../src/js/pixel.js";
 import { resetPlayer, resetPaddle, resetBall, startGameRun, loadLevel } from "../src/js/game.js";
+import { updateBalls, ballDamageOf } from "../src/js/physics.js";
 import { REWARDS } from "../src/js/rewards.js";
 import { CURSES } from "../src/js/curses.js";
 import { EVENTS } from "../src/js/events.js";
@@ -186,6 +187,7 @@ function run() {
 
     bulletChecks(nearBlackRatio);
     blockContrastChecks();
+    poisonZoneChecks();
 
     // 3. 各弹窗
     state.levelChoices = REWARDS.slice(0, 3);
@@ -374,6 +376,124 @@ function blockContrastChecks() {
 
     state.player.level = 1;
     state.blocks = [];
+}
+
+// ── 腐化母体毒雾：行为 + 可读性 ──────────────────────────
+// 背景：毒圈原本只检测挡板是否进入，但毒圈生成在 Boss 附近（y≈100~330），
+// 挡板在 y=560，两者永远不可能相交，所以毒圈此前完全没有效果。
+// 现在改为作用于球：进入则伤害减半 2.5s，不叠加，结束后 2s 免疫。
+function poisonZoneChecks() {
+    const POISON_DUR = 150, IMMUNE = 120;
+    const prep = (dmg = 4) => {
+        Object.assign(state, {
+            blocks: [], particles: [], rings: [], floatingTexts: [],
+            bossBullets: [], enemyBullets: [], bossDangerZones: [], boss: null,
+            gameState: STATE.PLAYING, dt: 1, freeze: 0,
+        });
+        state.player.ballDamage = dmg;
+        state.player.strikeTimer = 0;
+        resetBall();
+        const b = state.balls[0];
+        b.launched = true; b.vx = 0; b.vy = 0; b.x = 400; b.y = 300;
+        b.poisonTimer = 0; b.poisonImmune = 0;
+        return b;
+    };
+    const zone = (x = 400, y = 300, r = 40) => state.bossDangerZones.push(
+        { x, y, r, life: 99999, type: "hazard", color: PAL.vio2, _poison: true });
+    const step = (n, b) => {
+        const { x, y } = b;
+        for (let i = 0; i < n; i++) { updateBalls(); b.x = x; b.y = y; }
+    };
+
+    // 减伤幅度与下限
+    let b = prep(4);
+    check("毒雾-无毒时伤害不变", ballDamageOf(b) === 4);
+    zone(); step(1, b);
+    check("毒雾-进圈后伤害减半 4→2", ballDamageOf(b) === 2, );
+    b = prep(1); zone(); step(1, b);
+    check("毒雾-1 点伤害中毒后仍为 1（不归零）", ballDamageOf(b) === 1);
+
+    // 时长
+    b = prep(4); zone(); step(1, b);
+    check(`毒雾-持续 ${POISON_DUR} 帧 (2.5s)`, b.poisonTimer === POISON_DUR);
+    state.bossDangerZones.length = 0;
+    step(149, b);
+    check("毒雾-2.5s 内持续生效", b.poisonTimer > 0);
+    step(1, b);
+    check("毒雾-2.5s 后恢复", b.poisonTimer === 0 && ballDamageOf(b) === 4);
+    check(`毒雾-随即进入 ${IMMUNE} 帧 (2s) 免疫`, b.poisonImmune === IMMUNE);
+
+    // 不叠加
+    b = prep(4); zone(); step(1, b); step(50, b);
+    check("毒雾-圈内停留不刷新时长（不叠加）", b.poisonTimer === POISON_DUR - 50);
+    zone(400, 300, 40); step(1, b);
+    check("毒雾-两个毒圈重叠也不叠加", b.poisonTimer === POISON_DUR - 51);
+
+    // 免疫窗口
+    b = prep(4); zone(); step(POISON_DUR + 1, b);
+    check("毒雾-免疫期内不再中毒", b.poisonTimer === 0 && b.poisonImmune > 0);
+    step(IMMUNE - 1, b);
+    check("毒雾-免疫尚未结束", b.poisonImmune > 0 && b.poisonTimer === 0);
+    step(2, b);
+    check("毒雾-免疫结束后可再次中毒", b.poisonTimer >= POISON_DUR - 1);
+
+    // 判定边界：按球心，擦边不中毒
+    b = prep(4); zone(400, 300, 40); b.x = 445; step(1, b);
+    check("毒雾-球心在圈外(45>40)不中毒", b.poisonTimer === 0);
+    b = prep(4); zone(400, 300, 40); b.x = 435; step(1, b);
+    check("毒雾-球心在圈内(35<40)中毒", b.poisonTimer === POISON_DUR);
+
+    // 多球独立
+    b = prep(4);
+    state.balls.push({ ...b, x: 100, y: 100, poisonTimer: 0, poisonImmune: 0, trail: [] });
+    zone(400, 300, 40);
+    updateBalls();
+    check("毒雾-多球各自独立中毒",
+        state.balls[0].poisonTimer > 0 && state.balls[1].poisonTimer === 0);
+
+    // 可读性：中毒球 / 毒花 / 毒圈三者必须互相可辨（都在紫色系里）
+    const meanL = (data, x0, y0, x1, y1) => {
+        let s = 0, n = 0;
+        for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) {
+            for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) {
+                const o = (y * W + x) * 4;
+                s += 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2]; n++;
+            }
+        }
+        return n ? s / n : 0;
+    };
+    prep(4);
+    state.player.level = 30;
+    createBoss(30);
+    state.boss.x = 400; state.boss.y = 130;
+    state.boss.minions.push({ x: 300, y: 230, r: 14, hp: 20, maxHp: 20, type: "poison",
+        healTimer: 0, poisonTimer: 60, seekTimer: 0, flash: 0, angle: 0, color: PAL.vio3 });
+    state.bossDangerZones.push({ x: 375, y: 250, r: 40, life: 180, type: "hazard",
+        color: PAL.vio2, _poison: true });
+    const pb = state.balls[0];
+    pb.launched = true; pb.x = 350; pb.y = 250; pb.poisonTimer = 140;
+    render();
+    const dd = snapshot();
+    const zoneL = meanL(dd, 345, 220, 405, 280);
+    const flowerL = meanL(dd, 289, 219, 311, 241);
+    const ballL = meanL(dd, 343, 243, 357, 257);
+    check(`毒雾-中毒球与毒圈可辨 (差 ${Math.abs(ballL - zoneL).toFixed(0)} > 25)`,
+        Math.abs(ballL - zoneL) > 25);
+    check(`毒雾-毒花与毒圈可辨 (差 ${Math.abs(flowerL - zoneL).toFixed(0)} > 25)`,
+        Math.abs(flowerL - zoneL) > 25);
+    // 圆形填充不得溢出到圆外（外接方形四角应为地板色）
+    let bleed = 0;
+    for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const x = 375 + Math.round(dx * 40 * 0.92), y = 250 + Math.round(dy * 40 * 0.92);
+        const o = (y * W + x) * 4;
+        if (dd[o] === 0x63 && dd[o + 1] === 0x3a && dd[o + 2] === 0x86) bleed++;
+    }
+    check("毒雾-圆形填充不溢出圆外", bleed === 0);
+
+    state.boss = null;
+    state.bossDangerZones = [];
+    state.player.level = 1;
+    resetBall();
 }
 
 function centerHit(name, drawFn, hitFn, pick) {

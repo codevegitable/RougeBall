@@ -54,6 +54,7 @@ import {
     hitSettingsBackButton,
     handleSettingsClick,
     hitPauseCodexButton,
+    hitPauseStatusButton,
     hitCodexTab,
     hitCodexNext,
     hitCodexPrev,
@@ -65,6 +66,7 @@ import { getUnlocks, setSkin, skinDef, getSelectedSkin } from "./unlocks.js";
 import { loadSettings, applySettings } from "./settings.js";
 import { GAME_CONFIG } from "./config.js";
 import { REWARDS, recalcStats } from "./rewards.js";
+import { CURSES_MAP } from "./curses.js";
 import { PAL } from "./palette.js";
 import { initPixelMode } from "./pixel.js";
 
@@ -147,6 +149,10 @@ window.addEventListener("keydown", (e) => {
         }
         if (state.gameState === STATE.SETTINGS) {
             state.gameState = STATE.MENU;
+            return;
+        }
+        if (state.gameState === STATE.STATUS) {
+            state.gameState = STATE.PAUSED;
             return;
         }
         if (state.gameState === STATE.EVENT) {
@@ -334,6 +340,9 @@ canvas.addEventListener("click", (e) => {
             lock();
             state.codexFrom = "pause";
             state.gameState = STATE.CODEX;
+        } else if (hitPauseStatusButton(pos.x, pos.y)) {
+            lock();
+            state.gameState = STATE.STATUS;
         }
         return;
     }

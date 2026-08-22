@@ -139,6 +139,8 @@ export function resetBall() {
             piercingLeft: state.player.maxPiercing,
             trail: [],
             blockHits: 0,
+            poisonTimer: 0,
+            poisonImmune: 0,
         },
     ];
 }

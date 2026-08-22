@@ -3,7 +3,7 @@ import { state } from "./state.js";
 import { ctx } from "./canvas.js";
 import { skinDef, getSelectedSkin, DEFAULT_SKIN_COLORS } from "./unlocks.js";
 import { PAL, BLOCK_TIERS, rgba } from "./palette.js";
-import { PX, snap, pRect, pRectRaw, pStroke, pCircle, initPixelMode } from "./pixel.js";
+import { PX, snap, pRect, pRectRaw, pStroke, pCircle, pRing, initPixelMode } from "./pixel.js";
 import { FIELD_TOP, SKILL_Y } from "./layout.js";
 import { drawDungeon } from "./stars.js";
 import { drawParticles } from "./particles.js";
@@ -19,6 +19,7 @@ import {
     drawBossClear,
     drawPauseScreen,
     drawSettingsScreen,
+    drawStatusScreen,
     drawCodex,
     drawGameOver,
     drawVictory,
@@ -89,9 +90,12 @@ export function drawBalls() {
     for (let i = 0; i < state.balls.length; i++) {
         const b = state.balls[i];
         const isMain = i === 0;
-        const core = isMain ? PAL.gold3 : PAL.arc3;
-        const mid = isMain ? PAL.gold2 : PAL.arc2;
-        const edge = isMain ? PAL.gold1 : PAL.arc1;
+        // 中毒：整颗球转紫，玩家一眼能看出伤害为什么变低。
+        // 免疫窗口内球缘留一圈苔绿，提示"现在可以安全穿毒圈"。
+        const poisoned = b.poisonTimer > 0;
+        const core = poisoned ? PAL.vio3 : isMain ? PAL.gold3 : PAL.arc3;
+        const mid = poisoned ? PAL.vio2 : isMain ? PAL.gold2 : PAL.arc2;
+        const edge = poisoned ? PAL.vio1 : isMain ? PAL.gold1 : PAL.arc1;
 
         // 拖尾：逐渐变小的像素方块
         for (let t = 0; t < b.trail.length; t++) {
@@ -106,6 +110,18 @@ export function drawBalls() {
         pCircle(b.x, b.y, b.radius, edge);
         pCircle(b.x, b.y, b.radius - PX * 0.5, mid);
         pRectRaw(b.x - b.radius * 0.5, b.y - b.radius * 0.5, PX * 2, PX * 2, core);
+
+        // 中毒剩余时间：球上方一道短进度条，让玩家知道还有多久恢复
+        if (poisoned) {
+            const ratio = Math.min(1, b.poisonTimer / 150);
+            const bw = PX * 5;
+            const bx = snap(b.x - bw / 2);
+            const by = snap(b.y - b.radius - PX * 3);
+            pRect(bx, by, bw, PX, PAL.ink0);
+            pRect(bx, by, snap(bw * ratio), PX, PAL.vio3);
+        } else if (b.poisonImmune > 0) {
+            pRing(b.x, b.y, b.radius + PX, PAL.moss2, 1);
+        }
     }
 }
 
@@ -272,6 +288,7 @@ export function render() {
     if (state.gameState === STATE.CURSE_SELECT) drawCurseScreen();
     if (state.gameState === STATE.PAUSED) drawPauseScreen();
     if (state.gameState === STATE.CODEX) drawCodex();
+    if (state.gameState === STATE.STATUS) drawStatusScreen();
     if (state.gameState === STATE.SETTINGS) drawSettingsScreen();
     if (state.gameState === STATE.GAME_OVER) drawGameOver();
     if (state.gameState === STATE.VICTORY) drawVictory();

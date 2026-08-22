@@ -35,6 +35,7 @@ export const STATE = {
     PENALTY: "penalty", // 惩罚选择（Boss 奖励后）
     CURSE_SELECT: "curseSelect", // 诅咒三选一
     CODEX: "codex", // 图鉴：奖励/诅咒/事件数据
+    STATUS: "status", // 角色状态总览
     SETTINGS: "settings", // 设置
     GAME_OVER: "gameOver",
     VICTORY: "victory",

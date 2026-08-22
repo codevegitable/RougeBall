@@ -34,7 +34,7 @@ export function setCodexPage(d) { codexPage = Math.max(0, codexPage + d); }
 let startBtn = null, continueBtn = null, restartBtn = null;
 let rewardCards = [], swapCards = [], swapCancelBtn = null;
 let eventButtons = [], eventContinueBtn = null, bossClearBtn = null;
-let pauseResumeBtn = null, pauseRestartBtn = null, pauseQuitBtn = null;
+let pauseResumeBtn = null, pauseRestartBtn = null, pauseQuitBtn = null, pauseStatusBtn = null;
 let penaltyCards = [], curseCards = [];
 let menuCodexBtn = null, pauseCodexBtn = null, menuSkinBtn = null, menuSettingsBtn = null, gameOverExitBtn = null;
 let codexTabBtns = [], codexNextBtn = null, codexPrevBtn = null;
@@ -56,6 +56,7 @@ export const hitMenuCodexButton = (x, y) => inRect(x, y, menuCodexBtn);
 export const hitMenuSkinButton = (x, y) => inRect(x, y, menuSkinBtn);
 export const hitMenuSettingsButton = (x, y) => inRect(x, y, menuSettingsBtn);
 export const hitPauseCodexButton = (x, y) => inRect(x, y, pauseCodexBtn);
+export const hitPauseStatusButton = (x, y) => inRect(x, y, pauseStatusBtn);
 export const hitCodexNext = (x, y) => inRect(x, y, codexNextBtn);
 export const hitCodexPrev = (x, y) => inRect(x, y, codexPrevBtn);
 export const hitBossClearButton = (x, y) => inRect(x, y, bossClearBtn);
@@ -452,11 +453,107 @@ export function drawPauseScreen() {
     y += BTN_H + 10;
     pauseCodexBtn = pButton(bx, y, bw, BTN_H, "图鉴", { kind: "secondary", icon: "book" });
     y += BTN_H + 10;
+    pauseStatusBtn = pButton(bx, y, bw, BTN_H, "角色状态", { kind: "secondary", icon: "user" });
+    y += BTN_H + 10;
     pauseRestartBtn = pButton(bx, y, bw, BTN_H, "重新开始", { kind: "secondary" });
     y += BTN_H + 10;
     pauseQuitBtn = pButton(bx, y, bw, BTN_H, "保存并返回主菜单", { kind: "secondary", size: 14 });
 
     pTextShadow("ESC 继续", W / 2, m.y + 344 - PX * 3, PAL.mist0, { size: 11, align: "center" });
+}
+
+// ═══ 角色状态总览 ═════════════════════════════════════════
+export function drawStatusScreen() {
+    const p = state.player;
+    const modal = pModal(600, 520, "角色状态", { icon: "user", scrim: 0.88 });
+    const X0 = modal.x + PX * 2;
+    const X1 = X0 + 280;
+    let y = modal.y + PX * 6;
+    const L = 17;
+
+    // ── 1. 当前数值 ──
+    pTextShadow("╴ 当前数值", X0, y, PAL.gold3, { size: 14, align: "left" });
+    y += L + 2;
+    const stats = [
+        ["生命", `${Math.floor(p.lives)}`],
+        ["分数", `${Math.floor(p.score / 10)}`],
+        ["关卡", `${p.level}`],
+        ["球伤害", `${p.ballDamage}`],
+        ["球速倍率", `${(p.ballSpeedMul * 100).toFixed(0)}%`],
+        ["挡板加成", `${((p.paddleBonus || 0) * 100).toFixed(0)}%`],
+        ["分数倍率", `${(p.scoreMul * 100).toFixed(0)}%`],
+        ["穿透次数", `${p.maxPiercing}`],
+        ["技能 CD 倍率", `${(p.skillCdMul * 100).toFixed(0)}%`],
+        ["开局球数", `${p.startBalls}`],
+        ["球体积", `${(p.ballRadiusMul * 100).toFixed(0)}%`],
+    ];
+    for (const [k, v] of stats) {
+        pTextShadow(k, X0, y, PAL.mist1, { size: 12, align: "left" });
+        pTextShadow(v, X1, y, PAL.bone1, { size: 12, align: "right" });
+        y += 14;
+    }
+    y += 6;
+
+    // ── 2. 当前技能 ──
+    pTextShadow("╴ 当前技能", X0, y, PAL.gold3, { size: 14, align: "left" });
+    y += L + 2;
+    const skills = p.skills || [];
+    if (skills.length === 0) {
+        pTextShadow("（无装备技能）", X0, y, PAL.mist0, { size: 12, align: "left" });
+        y += 16;
+    } else {
+        for (const s of skills) {
+            const def = REWARD_MAP[s.id] || SKIN_START_SKILLS[s.id];
+            if (def) {
+                pTextShadow(`${def.icon} ${def.name}`, X0, y, PAL.bone1, { size: 12, align: "left" });
+                pTextShadow(def.desc, X1, y, PAL.mist1, { size: 11, align: "right" });
+                y += 14;
+            }
+        }
+    }
+    y += 6;
+
+    // ── 3. 当前能力 ──
+    pTextShadow("╴ 当前能力", X0, y, PAL.gold3, { size: 14, align: "left" });
+    y += L + 2;
+    const perks = p.perks || {};
+    const perkEntries = Object.entries(perks).filter(([id]) => {
+        const def = REWARD_MAP[id];
+        return def && def.type === "ability";
+    });
+    if (perkEntries.length === 0) {
+        pTextShadow("（无能力）", X0, y, PAL.mist0, { size: 12, align: "left" });
+        y += 16;
+    } else {
+        for (const [id, count] of perkEntries) {
+            const def = REWARD_MAP[id];
+            const label = count > 1 ? `${def.icon} ${def.name} ×${count}` : `${def.icon} ${def.name}`;
+            pTextShadow(label, X0, y, PAL.bone1, { size: 12, align: "left" });
+            pTextShadow(def.desc, X1, y, PAL.mist1, { size: 11, align: "right" });
+            y += 14;
+        }
+    }
+    y += 6;
+
+    // ── 4. 当前诅咒 ──
+    pTextShadow("╴ 当前诅咒", X0, y, PAL.gold3, { size: 14, align: "left" });
+    y += L + 2;
+    const curses = p.curses || [];
+    if (curses.length === 0) {
+        pTextShadow("（无诅咒）", X0, y, PAL.mist0, { size: 12, align: "left" });
+        y += 16;
+    } else {
+        for (const c of curses) {
+            const def = CURSES_MAP[c.id];
+            if (def) {
+                const desc = typeof def.desc === "function" ? def.desc(c.count) : def.desc;
+                const label = c.count > 1 ? `${def.icon} ${def.name} ×${c.count}` : `${def.icon} ${def.name}`;
+                pTextShadow(label, X0, y, PAL.blood2, { size: 12, align: "left" });
+                pTextShadow(desc, X1, y, PAL.mist1, { size: 11, align: "right" });
+                y += 14;
+            }
+        }
+    }
 }
 
 // ═══ 诅咒三选一 ═════════════════════════════════════════

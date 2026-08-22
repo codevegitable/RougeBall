@@ -146,7 +146,7 @@ export function recalcStats() {
     p.ballSpeedMul = Math.pow(0.88, n("slow_ball")) * Math.pow(1.05, n("double_strike"));
     p.paddleBonus = (n("wider_paddle") * 0.25 + n("giant_paddle") * 0.5) * rewardScale;
     p.scoreMul = Math.pow(2, n("gold_soul"));
-    p.healChance = 0.02 * n("vampire") + 0.04 * n("vampiric_gem");
+    p.healChance = 0.025 * n("vampire") + 0.05 * n("vampiric_gem");
     p.bossResist = n("iron_will") > 0 ? 0.5 : 0;
     p.thorns = 5 * n("thorn_armor");
     p.maxPiercing = n("piercing");
@@ -263,6 +263,8 @@ export function spawnExtraBalls(count) {
             piercingLeft: state.player.maxPiercing,
             trail: [],
             blockHits: 0,
+            poisonTimer: 0,
+            poisonImmune: 0,
         });
     }
 }

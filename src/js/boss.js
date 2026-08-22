@@ -285,17 +285,19 @@ function executeSummon(boss, a, dt) {
     }
 }
 
-// 召唤物类型池（母体）：
-// healer=治疗花 / poison=腐化花（制造毒区） / vine=藤蔓（束缚减速）
-// 蜂巢：repair=修复无人机 / shield=护盾无人机（给 Boss 减伤） / bomber=自爆无人机
+// 召唤物类型池
+// 母体（tier 1）：healer=治疗花 / poison=腐化花 / vine=藤蔓
 const MOTHER_MINIONS = [
-    ["healer", 1], ["healer", 1], ["poison", 1.5], ["poison", 1.5], ["vine", 1.2],
+    ["healer", 1], ["poison", 1.5], ["poison", 1.5], ["vine", 1.2],
 ];
+// 蜂巢（tier 2）：turret=弹幕无人机 / shield=护盾无人机 / bomber=自爆无人机（无回血）
 const HIVE_MINIONS = [
-    ["repair", 1], ["repair", 1], ["shield", 1.2], ["bomber", 1.5],
+    ["turret", 1.5], ["turret", 1.5], ["shield", 1.2], ["bomber", 1.2],
 ];
 
 function spawnMinionForType(boss) {
+    // 根据层级减少召唤频率：tier 1-2 有概率跳过
+    if (boss.tier >= 1 && Math.random() < 0.4) return;
     const angle = Math.random() * Math.PI * 2;
     const dist = 120 + Math.random() * 60;
     const mx = Math.max(40, Math.min(W - 40, boss.x + Math.cos(angle) * dist));
@@ -315,13 +317,14 @@ function spawnMinionForType(boss) {
         roll -= w;
         if (roll <= 0) { picked = kind; break; }
     }
-    const colors = { healer: PAL.moss3, poison: PAL.vio2, vine: PAL.arc2, repair: PAL.moss3, shield: PAL.gold3, bomber: PAL.ember2 };
+    const colors = { healer: PAL.moss3, poison: PAL.vio3, vine: PAL.arc2, turret: PAL.ember2, shield: PAL.gold3, bomber: PAL.ember2 };
     const bossId = state.boss;
     boss.minions.push({
         x: mx, y: my, r: 14, hp: 20 + boss.tier * 10,
         maxHp: 20 + boss.tier * 10, type: picked,
-        healTimer: picked === "healer" || picked === "repair" ? 180 : 0,
+        healTimer: picked === "healer" ? 180 : 0,
         poisonTimer: picked === "poison" ? 120 : 0,
+        shootTimer: picked === "turret" ? 60 : 0,
         seekTimer: picked === "bomber" ? 90 : 0,
         flash: 0, angle: 0, color: colors[picked] || PAL.bone1,
     });
@@ -332,7 +335,7 @@ function updateMinions(boss, dt) {
     for (let i = boss.minions.length - 1; i >= 0; i--) {
         const m = boss.minions[i];
         m.flash = Math.max(0, m.flash - 0.08 * dt);
-        if (m.type === "healer" || m.type === "repair") {
+        if (m.type === "healer") {
             m.healTimer -= dt;
             if (m.healTimer <= 0) {
                 m.healTimer = 180;
@@ -355,7 +358,7 @@ function updateMinions(boss, dt) {
         if (m.type === "vine" && Math.hypot(state.paddle.x - m.x, state.paddle.y - m.y) < 80) {
             state.player.curseMoveResist = (state.player.curseMoveResist || 0) + 0.3;
         }
-        // 自爆无人机：追向挡板5秒后爆炸
+        // 自爆无人机：追向挡板
         if (m.type === "bomber") {
             m.seekTimer -= dt;
             const dx = state.paddle.x + state.paddle.width / 2 - m.x;
@@ -364,7 +367,6 @@ function updateMinions(boss, dt) {
             m.x += (dx / len) * 0.6 * dt;
             m.y += (dy / len) * 0.6 * dt;
             if (m.seekTimer <= 0 || len < 20) {
-                // 爆炸，伤害挡板
                 state.boss.minions.splice(i, 1);
                 if (len < 80) {
                     state.invulnTimer = 100;
@@ -373,6 +375,24 @@ function updateMinions(boss, dt) {
                     spawnFloatingText(m.x, m.y, "爆炸！", PAL.ember3);
                 }
                 continue;
+            }
+        }
+        // 弹幕无人机：定期发射单发子弹
+        if (m.type === "turret") {
+            m.shootTimer -= dt;
+            if (m.shootTimer <= 0) {
+                m.shootTimer = 60 + Math.random() * 30;
+                const px = state.paddle.x + state.paddle.width / 2;
+                const py = state.paddle.y;
+                const ang = Math.atan2(py - m.y, px - m.x);
+                const spd = 2.0 + boss.tier * 0.2;
+                state.bossBullets.push({
+                    x: m.x, y: m.y,
+                    vx: Math.cos(ang) * spd,
+                    vy: Math.sin(ang) * spd,
+                    r: 6, age: 0, homing: false, splitAt: 0, wave: null,
+                });
+                playBossShoot();
             }
         }
         // 受击（由 physics.js 处理碰撞）
@@ -763,7 +783,7 @@ export function drawBoss() {
     }
 
     // 召唤物：像素圆 + 类型点阵图标 + 顶部血条
-    const MINION_ICONS = { healer: "flower", poison: "potion", vine: "vine", repair: "wrench", shield: "shield", bomber: "bomb" };
+    const MINION_ICONS = { healer: "flower", poison: "potion", vine: "vine", turret: "target", shield: "shield", bomber: "bomb" };
     for (const m of boss.minions) {
         const mx = m.x - boss.x;
         const my = m.y - boss.y;
@@ -926,17 +946,41 @@ export function drawBossDangerZones() {
             ctx.globalAlpha = 1;
         } else if (z.type === "hazard") {
             const a = Math.max(0, Math.min(1, z.life / 240));
-            // 网点填充：密度随剩余时间衰减，像素风的"半透明"
+            // 毒雾用紫色，与中毒后变紫的球对应；其他 hazard 仍是血红。
+            // 配色一致玩家才能把"踩到这个"和"球变紫了"联系起来。
+            const fill = z._poison ? PAL.vio1 : PAL.blood1;
+            const ring = z._poison ? PAL.vio2 : PAL.blood2;
             const d = a * 0.35;
-            if (d > 0.02) {
-                pDitherMask(z.x - z.r, z.y - z.r, z.r * 2, z.r * 2, PAL.blood1, d);
-            }
+            if (d > 0.02) drawZoneFill(z.x, z.y, z.r, fill, d);
             ctx.globalAlpha = Math.min(1, a * 1.2);
-            pRing(z.x, z.y, z.r, PAL.blood2, 1);
+            pRing(z.x, z.y, z.r, ring, 1);
             ctx.globalAlpha = 1;
         }
     }
 }
+
+// 圆形网点填充：逐行裁剪到圆内。
+// pDitherMask 填的是正方形，会溢出到圆环之外，让"圆形危险区"的边界失真——
+// 而这个边界正是玩家判断进出的依据。
+function drawZoneFill(cx, cy, r, color, density) {
+    const gx = Math.round(cx / PX), gy = Math.round(cy / PX);
+    const gr = Math.max(1, Math.round(r / PX));
+    ctx.fillStyle = color;
+    for (let dy = -gr; dy <= gr; dy++) {
+        const span = Math.floor(Math.sqrt(Math.max(0, gr * gr - dy * dy)));
+        for (let dx = -span; dx <= span; dx++) {
+            if ((ZONE_BAYER[(dy + gr) & 3][(dx + gr) & 3] + 0.5) / 16 >= density) continue;
+            ctx.fillRect((gx + dx) * PX, (gy + dy) * PX, PX, PX);
+        }
+    }
+}
+
+const ZONE_BAYER = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5],
+];
 
 // 方块射出的子弹：方形弹丸 + 尾迹。
 // 原实现 r=5 经 round(5/4)*4 量化成 4，整颗弹只有 8×8 且大半是黑边，

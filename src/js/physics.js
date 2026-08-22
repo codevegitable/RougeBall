@@ -235,6 +235,21 @@ const onBallHits = (b, cx) => {
 };
 
 // ─── 球的更新 ─────────────────────────────────────────────
+// ─── 球的有效伤害 ─────────────────────────────────────────
+// 所有伤害点（方块 / Boss / 召唤物 / 祭坛）都必须走这里，否则新增伤害来源
+// 会静默绕过中毒减伤。中毒 = 伤害减半，向下取整但不低于 1
+// （否则 1 点伤害的球中毒后打不动任何东西，等于被完全废掉）。
+export function ballDamageOf(b) {
+    const p = state.player;
+    let dmg = p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
+    if (b && b.poisonTimer > 0) dmg = Math.max(1, Math.floor(dmg * 0.5));
+    return dmg;
+}
+
+// 毒雾参数（帧，60fps）
+const POISON_DURATION = 150;   // 减伤持续 2.5s
+const POISON_IMMUNE = 120;     // 效果结束后 2s 免疫，防止在毒圈里被反复上毒
+
 export function updateBalls() {
     const balls = state.balls;
     const blocks = state.blocks;
@@ -253,6 +268,18 @@ export function updateBalls() {
         });
         if (b.trail.length > 14) b.trail.splice(0, b.trail.length - 14);
 
+        // 中毒计时：先走减伤时长，归零后转入免疫窗口
+        if (b.poisonTimer > 0) {
+            b.poisonTimer -= dt;
+            if (b.poisonTimer <= 0) {
+                b.poisonTimer = 0;
+                b.poisonImmune = POISON_IMMUNE;
+                spawnFloatingText(b.x, b.y - 16, "毒性消退", PAL.moss3);
+            }
+        } else if (b.poisonImmune > 0) {
+            b.poisonImmune = Math.max(0, b.poisonImmune - dt);
+        }
+
         if (!b.launched) {
             b.x = paddle.x + paddle.width / 2;
             b.y = paddle.y - b.radius - 2;
@@ -263,6 +290,9 @@ export function updateBalls() {
         const speedMul = (p.altarSpeedP || 1) * dt;
         b.x += b.vx * speedMul;
         b.y += b.vy * speedMul;
+
+        // 毒雾：球进入毒区则中毒减伤。放在移动之后判定，避免用上一帧的位置。
+        applyPoisonZones(b);
 
         // Wall collisions
         if (b.x - b.radius <= 0) {
@@ -345,7 +375,7 @@ export function updateBalls() {
                     b.vx -= 2 * dot * nx;
                     b.vy -= 2 * dot * ny;
                 }
-                minion.hp -= p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
+                minion.hp -= ballDamageOf(b);
                 minion.flash = 1;
                 spawnParticles(b.x, b.y, PAL.moss3, 4);
                 if (minion.hp <= 0) {
@@ -378,11 +408,11 @@ export function updateBalls() {
                     b.vx -= 2 * dot * nx;
                     b.vy -= 2 * dot * ny;
                 }
-                let bdmg = p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
+                let bdmg = ballDamageOf(b);
                 // 铁壁执行者：正面减伤（球从下方打正面），背面增伤（球从上方打背）
                 if (bo.bossType === "executor") {
                     if (ny > 0.3) {
-                        bdmg = Math.max(1, Math.round(bdmg * 0.5));
+                        bdmg = Math.max(1, Math.round(bdmg * 0.25));
                         spawnFloatingText(bo.x, bo.y - bo.r - 26, "正面!", PAL.mist1);
                     } else if (ny < -0.3) {
                         bdmg = Math.round(bdmg * 1.5);
@@ -414,7 +444,7 @@ export function updateBalls() {
                             b.vx -= 2 * adot * anx;
                             b.vy -= 2 * adot * any;
                         }
-                        al.hp -= p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
+                        al.hp -= ballDamageOf(b);
                         al.flash = 1;
                         spawnParticles(b.x, b.y, PAL.vio2, 4);
                         if (al.hp <= 0) {
@@ -457,7 +487,7 @@ export function updateBalls() {
             const overlapX = b.radius + bl.w / 2 - Math.abs(b.x - (bl.x + bl.w / 2));
             const overlapY = b.radius + bl.h / 2 - Math.abs(b.y - (bl.y + bl.h / 2));
 
-            const dmg = p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
+            const dmg = ballDamageOf(b);
             bl.hp -= dmg;
 
             // 撞击方块时球加速
@@ -534,6 +564,25 @@ function bounceSide(b, bl) {
     }
 }
 
+// 毒雾判定：球心进入毒区就中毒。
+// 三条规则，都是为了让毒圈"有威胁但不无解"：
+//  ① 已中毒时再次进入不刷新时长——否则待在毒圈里就是永久减伤，无从摆脱；
+//  ② 免疫窗口内不再中毒——毒圈存在 3s 而减伤 2.5s，没有免疫的话
+//     效果一结束会立刻在同一个毒圈里重新中毒，实际等于永久生效；
+//  ③ 按球心而非球缘判定——擦边不中毒，玩家能主动穿毒圈边缘走位。
+function applyPoisonZones(b) {
+    if (b.poisonTimer > 0 || b.poisonImmune > 0) return;
+    for (const z of state.bossDangerZones) {
+        if (!z._poison) continue;
+        if (Math.hypot(b.x - z.x, b.y - z.y) > z.r) continue;
+        b.poisonTimer = POISON_DURATION;
+        spawnParticles(b.x, b.y, PAL.vio2, 8);
+        spawnFloatingText(b.x, b.y - 18, "中毒！伤害减半", PAL.vio3);
+        playBlockHit();
+        break;
+    }
+}
+
 // color 传 null 时按弹种取色，碎屑与被打掉的那颗弹颜色一致
 function destroyBulletsWithBall(b, bulletArray, color) {
     for (let k = bulletArray.length - 1; k >= 0; k--) {
@@ -554,4 +603,7 @@ function resetBallToPaddle(b) {
     b.launched = false;
     b.piercingLeft = state.player.maxPiercing;
     b.trail = [];
+    // 球回到挡板等于重新出发，中毒与免疫一并清掉
+    b.poisonTimer = 0;
+    b.poisonImmune = 0;
 }
