@@ -141,7 +141,7 @@ export function recalcStats() {
     // 奖励缩放：随 Boss 击败次数降低效果（最后一层约 1/3）
     const bossDefeated = p.bossDefeated || 0;
     const rewardScale = Math.max(0.33, 1 - bossDefeated * 0.12);
-    p.ballDamage = 1 + Math.round((n("power_ball") + n("mega_ball") * 2 + n("annihil_ball") * 3 + n("double_strike")) * rewardScale);
+    p.ballDamage = 1 + Math.round((n("power_ball") + n("mega_ball") * 2 + n("annihil_ball") * 3 + n("double_strike") * 2) * rewardScale);
     p.ballSpeedMul = Math.pow(0.88, n("slow_ball")) * Math.pow(1.05, n("double_strike"));
     p.paddleBonus = (n("wider_paddle") * 0.25 + n("giant_paddle") * 0.5) * rewardScale;
     p.scoreMul = Math.pow(2, n("gold_soul"));
