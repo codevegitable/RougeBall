@@ -149,7 +149,7 @@ function postBreakHooks(cx, cy, bl) {
 
     // 吸血之触
     if (p.healChance > 0 && Math.random() < p.healChance) {
-        p.lives += 1;
+        p.lives += 1 * (p.healMul || 1);
         spawnFloatingText(cx, cy - 20, "生命 +1", PAL.moss3);
         playHeal();
     }
@@ -158,7 +158,7 @@ function postBreakHooks(cx, cy, bl) {
         p._siphonSkillCounter = (p._siphonSkillCounter || 0) + 1;
         if (p._siphonSkillCounter >= 5) {
             p._siphonSkillCounter = 0;
-            p.lives += 0.1;
+            p.lives += 0.1 * (p.healMul || 1);
             spawnFloatingText(cx, cy - 20, "生命 +0.1（技能）", PAL.blood3);
             playHeal();
         }
@@ -168,9 +168,26 @@ function postBreakHooks(cx, cy, bl) {
         p._siphonCounter = (p._siphonCounter || 0) + 1;
         if (p._siphonCounter >= 15) {
             p._siphonCounter = 0;
-            p.lives += 0.1;
+            p.lives += 0.1 * (p.healMul || 1);
             spawnFloatingText(cx, cy - 20, `生命 +${0.1}`, PAL.moss3);
             playHeal();
+        }
+    }
+    // 震荡诅咒：每次击碎方块球速 +n×1.5%（每关重置）
+    if (p.curseDecelPerLevel > 0) {
+        p.curseDecayCounter = (p.curseDecayCounter || 0) + 1;
+        // 每击碎一个方块，累加一次微量速度提升
+        const speedUp = 1 + p.curseDecelPerLevel * p.curseDecayCounter * 0.002;
+        for (const b of state.balls) {
+            if (b.speed < 10) {
+                b.speed *= speedUp;
+                const spd = Math.hypot(b.vx, b.vy);
+                if (spd > 0.01) {
+                    const ratio = b.speed / spd;
+                    b.vx *= ratio;
+                    b.vy *= ratio;
+                }
+            }
         }
     }
     // 回音击：弹片伤及随机邻块

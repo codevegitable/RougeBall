@@ -72,6 +72,16 @@ import { CURSES_MAP } from "./curses.js";
 import { PAL } from "./palette.js";
 import { initPixelMode } from "./pixel.js";
 
+// ─── 开发者模式（SHA256 哈希验证）──────────────────────────
+const DEV_HASH = "2323971fc86c511995dde7ab4d12cedff0e9e5772c17d420bb3b1ab5d358301c";
+let devInputBuffer = "";
+
+async function sha256(str) {
+    const enc = new TextEncoder().encode(str);
+    const buf = await crypto.subtle.digest("SHA-256", enc);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 // ─── 魂斗罗秘籍检测 ───────────────────────────────────────
 const KONAMI_CODE = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 let konamiIndex = 0;
@@ -139,6 +149,14 @@ resize();
 window.addEventListener("keydown", (e) => {
     // 魂斗罗秘籍检测
     checkKonami(e);
+    // 开发者模式输入检测（不拦截游戏按键）
+    if (e.key === "Enter" && devInputBuffer.length > 0) {
+        e.preventDefault();
+        checkDevMode(devInputBuffer);
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        devInputBuffer += e.key;
+        if (devInputBuffer.length > 100) devInputBuffer = devInputBuffer.slice(-100);
+    }
     if (e.key === "Escape") {
         if (state.gameState === STATE.CODEX) {
             if (state.codexFrom === "pause") {
@@ -155,6 +173,10 @@ window.addEventListener("keydown", (e) => {
         }
         if (state.gameState === STATE.STATUS) {
             state.gameState = STATE.PAUSED;
+            return;
+        }
+        if (state.gameState === STATE.DEV_MODE) {
+            state.gameState = STATE.MENU;
             return;
         }
         if (state.gameState === STATE.EVENT) {

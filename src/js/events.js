@@ -85,7 +85,7 @@ const ACTION_RUNNERS = {
         return { text: `输了……获得诅咒：${curse.icon} ${curse.name}`, color: PAL.blood3 };
     },
     heal(a) {
-        state.player.lives += a.amount;
+        state.player.lives += a.amount * (state.player.healMul || 1);
         playHeal();
         return { text: `生命 +${a.amount}，身体重新充满活力`, color: PAL.moss3 };
     },

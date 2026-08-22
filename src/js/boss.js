@@ -3,7 +3,7 @@ import { state, addScore, loseLife } from "./state.js";
 import { ctx } from "./canvas.js";
 import { spawnParticles } from "./particles.js";
 import { screenShake, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
-import { playBossHit, playBossShoot, playBossDeath, playVictory, playPlayerHit, playWallHit } from "./sound.js";
+import { playBossHit, playBossShoot, playBossDeath, playVictory, playGameOver, playPlayerHit, playWallHit } from "./sound.js";
 import { BOSS_CANDIDATES, BOSS_TIER_INDEX } from "./data/bosses.js";
 import { PAL, rgba } from "./palette.js";
 import { PX, pRectRaw, pRing, pBar, pText, pDitherMask, pCircle, pBlob } from "./pixel.js";
@@ -20,6 +20,19 @@ function bossHitRect() {
     const base = PADDLE_BASE_W * (1 + (state.player.curseHitPenalty || 0));
     const extra = p.width - base;
     return { x: p.x + extra / 2, w: base, y: p.y, h: p.height };
+}
+
+// tier 威胁权重：把各项弹幕/召唤强度沿 tier 的增长放缓。
+//
+// 原实现所有项都按 tier 线性缩放（弹数 3+t、环形 6+2t、小怪血量 20+10t …），
+// 七项同时线性增长 → 综合威胁系数 1.00/1.29/1.59/1.91。这个乘数再乘上
+// 同样激增的 HP，使最终 Boss 冲到普通关直线的 5.25 倍。
+//
+// 改用 t^0.75 后综合威胁变成 1.00/1.23/1.40/1.54，增长更平缓：
+// 难度的主要载体交回给 HP（可读、可预期），而不是叠满弹幕数量。
+// 这样"斜率递增"依然成立，但不会陡到断层。
+export function tierWeight(tier) {
+    return Math.pow(Math.max(0, tier), 0.75);
 }
 
 export function createBoss(level) {
@@ -93,7 +106,9 @@ export function updateBoss() {
         if (boss.recoverTimer <= 0) {
             boss.vulnerable = false;
             boss.action = null;
-            boss.actionCooldown = 20 + Math.random() * 15;
+            // 第三层 Boss（tier 2）降低攻击频率：冷却延长 50%
+            const cdMul = boss.tier === 2 ? 1.5 : 1;
+            boss.actionCooldown = (20 + Math.random() * 15) * cdMul;
         }
         // 恢复阶段不执行其他动作
         updateBossBullets();
@@ -173,7 +188,7 @@ function executeCharge(boss, a, dt) {
         if (a.timer > 30) {
             a.phase = "active";
             a.timer = 0;
-            boss.chargeSpeed = 16 + boss.tier * 1.8;
+            boss.chargeSpeed = 13 + tierWeight(boss.tier) * 1.0;
             playBossShoot();
         }
     } else if (a.phase === "active") {
@@ -247,10 +262,15 @@ function executeSlam(boss, a, dt) {
             spawnRing(boss.x, boss.y, `rgba(255,${120 + boss.tier * 30},80,0.8)`);
             playBossHit();
             // 冲击波
-            const waveSpeed = 4 + boss.tier * 0.5;
+            const waveSpeed = 4 + tierWeight(boss.tier) * 0.4;
             state.bossDangerZones.push({ x: boss.x, y: boss.y, r: 0, maxR: 180 + boss.tier * 20, life: 60, type: "shockwave", speed: waveSpeed });
-            // 危险区
-            state.bossDangerZones.push({ x: boss.x, y: boss.y, r: 40 + boss.tier * 10, life: 240, type: "hazard", color: boss.color });
+            // 危险区：tier 0 不生成，tier 1 在落点生成较大红圈，tier 2+ 在落点生成标准红圈
+            if (boss.tier >= 1) {
+                const r = boss.tier === 1 ? 67 : 50 + boss.tier * 15;
+                state.bossDangerZones.push({
+                    x: boss.x, y: boss.y, r, life: 240, type: "hazard", color: boss.color,
+                });
+            }
             // 挡板在冲击波范围内则扣血
             const p = state.paddle;
             if (Math.hypot(p.x + p.width / 2 - boss.x, p.y - boss.y) < 180) {
@@ -325,9 +345,12 @@ function spawnMinionForType(boss) {
     }
     const colors = { healer: PAL.moss3, poison: PAL.vio3, vine: PAL.arc2, turret: PAL.ember2, shield: PAL.gold3, bomber: PAL.ember2 };
     const bossId = state.boss;
+    // 血量沿 tierWeight 放缓增长。hp 与 maxHp 必须取同一个值——
+    // 原来是 hp=20+t*10 / maxHp=15+t*8，hp 恒大于 maxHp，血条比例始终 >100%。
+    const minionHp = Math.round(18 + tierWeight(boss.tier) * 8);
     boss.minions.push({
-        x: mx, y: my, r: 14, hp: 20 + boss.tier * 10,
-        maxHp: 20 + boss.tier * 10, type: picked,
+        x: mx, y: my, r: 14, hp: minionHp,
+        maxHp: minionHp, type: picked,
         healTimer: picked === "healer" ? 180 : 0,
         poisonTimer: picked === "poison" ? 120 : 0,
         shootTimer: picked === "turret" ? 60 : 0,
@@ -391,7 +414,7 @@ function updateMinions(boss, dt) {
                 const px = state.paddle.x + state.paddle.width / 2;
                 const py = state.paddle.y;
                 const ang = Math.atan2(py - m.y, px - m.x);
-                const spd = 2.0 + boss.tier * 0.2;
+                const spd = 2.0 + tierWeight(boss.tier) * 0.16;
                 state.bossBullets.push({
                     x: m.x, y: m.y,
                     vx: Math.cos(ang) * spd,
@@ -429,8 +452,11 @@ function executeAltar(boss, a, dt) {
                 if (boss.altars.filter(x => !x.chasing).length < 4) {
                     spawnStaticAltar(boss);
                 }
-                // 30% 概率附带生成一个追踪祭坛（独立计数，上限 2）
-                if (Math.random() < 0.3 && boss.altars.filter(x => x.chasing).length < 2) {
+            }
+            // 释放 1-4 个攻击祭坛（独立计数，上限 6）
+            const chaseCount = 1 + Math.floor(Math.random() * 4);
+            for (let n = 0; n < chaseCount; n++) {
+                if (boss.altars.filter(x => x.chasing).length < 6) {
                     spawnChaseAltar(boss);
                 }
             }
@@ -450,24 +476,43 @@ function spawnStaticAltar(boss) {
     const ay = Math.max(100, Math.min(H - 80, boss.y + Math.sin(angle) * dist));
     const kinds = ["dmg", "speed", "cd"];
     const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    // 原来对象字面量里 hp 出现两次（15+t*8 与 12+t*6），后者覆盖前者才恰好
+    // 等于 maxHp。这里合并为单一变量，去掉这个容易误读的重复键。
+    const altarHp = Math.round(12 + tierWeight(boss.tier) * 5);
     boss.altars.push({
-        x: ax, y: ay, r: 20, hp: 15 + boss.tier * 8,
-        maxHp: 15 + boss.tier * 8, type: kind, flash: 0, chasing: false,
+        x: ax, y: ay, r: 20, hp: altarHp,
+        maxHp: altarHp, type: kind, flash: 0, chasing: false,
     });
     spawnFloatingText(ax, ay - 20, "诅咒祭坛出现！", PAL.vio2);
 }
 
 // 追踪祭坛：半场生成，缓慢移向玩家
+// 攻击祭坛：直线向下移动，触碰挡板扣 1.5 命并消失
+// 出现在 1/3 ～ 3/5 屏幕宽度，距玩家越近概率越低
 function spawnChaseAltar(boss) {
-    const ax = W / 2 + (Math.random() - 0.5) * 240;
-    const ay = 100 + Math.random() * (H - 200);
-    const kinds = ["dmg", "speed", "cd"];
-    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    const px = state.paddle.x + state.paddle.width / 2;
+    const minX = Math.round(W * 1 / 3);
+    const maxX = Math.round(W * 3 / 5);
+    // 加权随机：权重 = 1 / (距离 + 100)，距离越大概率越低
+    const samples = 10;
+    let bestX = minX, bestWeight = 0;
+    for (let i = 0; i < samples; i++) {
+        const cx = minX + Math.random() * (maxX - minX);
+        const dist = Math.abs(cx - px);
+        const w = 1 / (dist + 100);
+        if (w > bestWeight || i === 0) {
+            bestWeight = w;
+            bestX = cx;
+        }
+    }
+    const ax = Math.round(bestX / 2) * 2; // 对齐到偶数像素
+    const ay = -20 - Math.random() * 30; // 从画面上方外进入
+    const chaseHp = Math.round(10 + tierWeight(boss.tier) * 4);
     boss.altars.push({
-        x: ax, y: ay, r: 18, hp: 12 + boss.tier * 6,
-        maxHp: 12 + boss.tier * 6, type: kind, flash: 0, chasing: true,
+        x: ax, y: ay, r: 16, hp: chaseHp,
+        maxHp: chaseHp, flash: 0, chasing: true,
     });
-    spawnFloatingText(ax, ay - 20, "追踪祭坛！", PAL.ember2);
+    spawnFloatingText(ax, ay + 20, "攻击祭坛！", PAL.ember2);
 }
 
 // 祭坛持续的诅咒效果（每帧应用）
@@ -475,23 +520,46 @@ function altarCurseEffects() {
     const boss = state.boss;
     const p = state.player;
     if (!boss || !boss.altars) {
-        p.altarDmgP = 0;
-        p.altarSpeedP = 1;
-        p.altarCdP = 1;
+        if (p.altarDmgP !== 0 || p.altarSpeedP !== 1 || p.altarCdP !== 1) {
+            p.altarDmgP = 0;
+            p.altarSpeedP = 1;
+            p.altarCdP = 1;
+        }
         return;
     }
-    // 追踪祭坛：缓慢移向挡板
+    // 攻击祭坛：直线向下移动，触碰挡板扣血并消失
     const dt = state.dt;
-    for (const al of boss.altars) {
+    for (let i = boss.altars.length - 1; i >= 0; i--) {
+        const al = boss.altars[i];
         if (!al.chasing) continue;
-        const px = state.paddle.x + state.paddle.width / 2;
-        const py = state.paddle.y;
-        const dx = px - al.x;
-        const dy = py - al.y;
-        const len = Math.hypot(dx, dy) || 1;
-        const spd = (0.7 + boss.tier * 0.1) * dt;
-        al.x += (dx / len) * spd;
-        al.y += (dy / len) * spd;
+        // 向下移动（速度 0.8 px/帧，约 48 px/s）
+        al.y += 0.8 * dt;
+        // 碰到底部或超出画面 → 消失
+        if (al.y > H + 30 || al.y < -60) {
+            boss.altars.splice(i, 1);
+            continue;
+        }
+        // 碰撞挡板检测
+        const hr = bossHitRect();
+        if (al.x + al.r >= hr.x && al.x - al.r <= hr.x + hr.w &&
+            al.y + al.r >= hr.y && al.y - al.r <= hr.y + hr.h) {
+            boss.altars.splice(i, 1);
+            // 扣除 1.5 命
+            const pl = state.player;
+            if (!pl.shieldTimer && !state.invulnTimer) {
+                state.invulnTimer = 60;
+                playerHurt();
+                screenShake(8, 150);
+                playPlayerHit();
+                state.player.lives -= 1.5;
+                if (state.player.lives <= 0) {
+                    state.gameState = STATE.GAME_OVER;
+                    playGameOver();
+                }
+            }
+            spawnParticles(al.x, al.y, PAL.ember2, 12);
+            continue;
+        }
     }
     const hasDmg = boss.altars.some(x => x.type === "dmg");
     const hasSpeed = boss.altars.some(x => x.type === "speed");
@@ -523,8 +591,8 @@ function executeUltimate(boss, a, dt) {
         // 每 15 帧发射一波
         a._waves = a._waves || 0;
         if (a.timer > a._waves * 15) {
-            const count = 8 + boss.tier * 3;
-            const speed = 3.0 + boss.tier * 0.3;
+            const count = 8 + Math.round(tierWeight(boss.tier) * 2.4);
+            const speed = 3.0 + tierWeight(boss.tier) * 0.25;
             for (let i = 0; i < count; i++) {
                 const angle = (Math.PI * 2 * i) / count + a._waves * 0.3;
                 state.bossBullets.push({
@@ -563,6 +631,8 @@ function fireVolley(boss, dt) {
     boss.volleyTimer -= dt;
     if (boss.volleyTimer <= 0) {
         boss.volleyTimer = 90 + Math.random() * 60;
+        // 第三层 Boss 降低弹幕频率
+        if (boss.tier === 2) boss.volleyTimer *= 1.4;
         const pattern = boss.patterns[boss.volleyIdx % boss.patterns.length];
         boss.volleyIdx++;
         fireVolleySingle(boss, pattern);
@@ -572,8 +642,8 @@ function fireVolley(boss, dt) {
 function fireVolleySingle(boss, pattern) {
     const spd = boss.bulletSpeed * (1 + boss.phase * 0.1);
     switch (pattern) {
-        case "fan": aimedFan(boss, spd, 3 + boss.tier); break;
-        case "ring": ringBurst(boss, spd * 0.85, 6 + boss.tier * 2); break;
+        case "fan": aimedFan(boss, spd, 3 + Math.round(tierWeight(boss.tier) * 0.8)); break;
+        case "ring": ringBurst(boss, spd * 0.85, 6 + Math.round(tierWeight(boss.tier) * 1.6)); break;
         case "split": aimedFan(boss, spd, 3, { splitAt: 46 }); break;
         case "wave": aimedFan(boss, spd, 4, { wave: true }); break;
         case "homing": boss.homingQueue = 2; boss.homingTick = 8; break;
@@ -830,7 +900,7 @@ export function drawBoss() {
         pBar(mx - m.r, my - m.r - PX * 3, m.r * 2, PX * 2, m.hp / m.maxHp, mc, { bg: PAL.ink0 });
     }
 
-    // 祭坛：石座 + 悬浮符文（追踪祭坛用红色调标记）
+    // 祭坛：石座 + 悬浮符文（攻击祭坛用红色调标记，无 type 即攻击型）
     const ALTAR_ICONS = { dmg: "sword", speed: "lightning", cd: "hourglass" };
     for (const al of boss.altars) {
         const ax = al.x - boss.x;
@@ -844,7 +914,12 @@ export function drawBoss() {
             const a = boss.t * 0.03 + (Math.PI * 2 * i) / 3;
             pRectRaw(ax + Math.cos(a) * (al.r + PX) - PX / 2, ay + Math.sin(a) * (al.r + PX) - PX / 2, PX, PX, orbCol);
         }
-        drawIcon(ALTAR_ICONS[al.type] || "candle", ax, ay, 2, orbCol);
+        // 攻击祭坛：骷髅标记；普通祭坛：诅咒符文
+        if (al.chasing) {
+            drawIcon("skull", ax, ay, 2, PAL.ember3);
+        } else {
+            drawIcon(ALTAR_ICONS[al.type] || "candle", ax, ay, 2, orbCol);
+        }
         if (al.flash > 0.02) {
             ctx.globalAlpha = Math.min(1, al.flash * 0.8);
             pCircleAt(ax, ay, al.r - PX, PAL.bone1);

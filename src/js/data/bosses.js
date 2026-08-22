@@ -3,17 +3,23 @@
 // skills: 可用技能池（冲锋/跳砸/召唤/大招）
 // patterns: 弹幕模式（辅助威胁）
 
+// HP 与弹速由难度曲线反解得出（见 data/levels.js 的 BOSS_DIFFICULTY）：
+//   目标难度 = 普通关直线值 × 凸增倍数(1.15 / 1.34 / 1.75 / 2.35)
+//   HP = 目标难度 ÷ (tier 威胁系数 × 弹速修正)
+// 得到 HP 序列 115 → 245 → 420 → 535（倍数 2.18x / 1.72x / 1.26x，单调递增）。
+// 调整前是 82.5 → 175 → 370 → 665，末段 HP 近乎翻倍且弹幕威胁同步猛涨，
+// 使最终 Boss 达到直线的 5.25 倍，"每关难度增量"从 11 直接跳到 184。
 export const BOSS_CANDIDATES = {
     15: [
         {
-            name: "铁壁执行者", color: "#6a80d4", hp: 100, bulletSpeed: 1.8,
+            name: "铁壁执行者", color: "#5aa7ff", hp: 112, bulletSpeed: 1.45,
             bossType: "executor", tier: 0,
             skills: ["charge", "slam"],
             patterns: ["fan", "ring"],
             desc: "近战冲撞型，正面减伤，诱导撞墙后输出",
         },
         {
-            name: "回旋机兵", color: "#63a563", hp: 105, bulletSpeed: 1.6,
+            name: "回旋机兵", color: "#57d39a", hp: 118, bulletSpeed: 1.35,
             bossType: "executor", tier: 0,
             skills: ["charge", "slam"],
             patterns: ["spiral", "fan"],
@@ -22,14 +28,14 @@ export const BOSS_CANDIDATES = {
     ],
     30: [
         {
-            name: "腐化母体", color: "#cfa0e4", hp: 220, bulletSpeed: 2.0,
+            name: "腐化母体", color: "#b26bff", hp: 240, bulletSpeed: 1.60,
             bossType: "mother", tier: 1,
             skills: ["summon", "slam"],
             patterns: ["ring", "split"],
             desc: "召唤腐化植物，治疗花与毒花并存",
         },
         {
-            name: "剧毒核心", color: "#cf4455", hp: 230, bulletSpeed: 1.9,
+            name: "剧毒核心", color: "#e05a5a", hp: 252, bulletSpeed: 1.55,
             bossType: "mother", tier: 1,
             skills: ["summon", "slam"],
             patterns: ["wave", "ring"],
@@ -38,30 +44,30 @@ export const BOSS_CANDIDATES = {
     ],
     45: [
         {
-            name: "机械蜂巢", color: "#f07d84", hp: 460, bulletSpeed: 2.2,
+            name: "机械蜂巢", color: "#ff5a8c", hp: 412, bulletSpeed: 1.75,
             bossType: "hive", tier: 2,
-            skills: ["summon", "slam", "charge"],
+            skills: ["summon"],
             patterns: ["fan", "split"],
             desc: "部署无人机：修复/护盾/自爆",
         },
         {
-            name: "蜂群母舰", color: "#e0af38", hp: 480, bulletSpeed: 2.1,
+            name: "蜂群母舰", color: "#e8a33d", hp: 430, bulletSpeed: 1.70,
             bossType: "hive", tier: 2,
-            skills: ["summon", "slam", "charge"],
+            skills: ["summon"],
             patterns: ["spiral", "homing"],
             desc: "部署无人机：修复/护盾/自爆",
         },
     ],
     50: [
         {
-            name: "诅咒司祭", color: "#cf4455", hp: 820, bulletSpeed: 2.4,
+            name: "诅咒司祭", color: "#ff3333", hp: 525, bulletSpeed: 1.90,
             bossType: "priest", tier: 3,
             skills: ["altar", "slam", "charge"],
             patterns: ["fan", "homing", "split"],
             desc: "召唤诅咒祭坛，摧毁祭坛解除诅咒",
         },
         {
-            name: "虚空司祭", color: "#a464c4", hp: 860, bulletSpeed: 2.3,
+            name: "虚空司祭", color: "#8f5fe8", hp: 548, bulletSpeed: 1.85,
             bossType: "priest", tier: 3,
             skills: ["altar", "slam", "charge"],
             patterns: ["spiral", "wave", "ring"],

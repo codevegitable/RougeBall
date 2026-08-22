@@ -20,6 +20,7 @@ import {
     drawPauseScreen,
     drawSettingsScreen,
     drawStatusScreen,
+    drawDevModeScreen,
     drawCodex,
     drawGameOver,
     drawVictory,
@@ -322,9 +323,10 @@ function drawMetalBlock(x, y, w, h) {
 // 用铆钉而非整片覆盖，是为了不盖住血量档位的主体色——玩家仍要靠底色判断
 // 还剩几下，铆钉只叠加"这块被加固过"的信息。铆钉用 stone3/mist0 的冷金属色，
 // 与任何血量档位的暖色主体都有色相差，不会糊成一团。
+// armorRatio = 1.0（满装甲）→ 0.0（装甲已碎），0 时完全不绘制。
 function drawArmorPlating(x, y, w, h) {
-    const R = PX * 2;                    // 铆钉边长
-    const inset = PX * 2;                // 距方块轮廓的内缩
+    const R = PX * 2;
+    const inset = PX * 2;
     const corners = [
         [x + inset, y + inset],
         [x + w - inset - R, y + inset],
@@ -333,11 +335,9 @@ function drawArmorPlating(x, y, w, h) {
     ];
     for (const [cx, cy] of corners) {
         pRect(cx, cy, R, R, PAL.stone3);
-        pRect(cx, cy, R - PX, R - PX, PAL.mist0);   // 左上高光
-        pRect(cx + PX, cy + PX, PX, PX, PAL.stone0); // 右下凹陷
+        pRect(cx, cy, R - PX, R - PX, PAL.mist0);
+        pRect(cx + PX, cy + PX, PX, PX, PAL.stone0);
     }
-
-    // 中央加固条：竖向双线，暗示"内里还有一层钢板"
     if (w >= PX * 10) {
         const mx = snap(x + w / 2 - PX);
         pRect(mx, y + inset, PX, h - inset * 2, PAL.stone3);
@@ -415,6 +415,7 @@ export function render() {
     if (state.gameState === STATE.PAUSED) drawPauseScreen();
     if (state.gameState === STATE.CODEX) drawCodex();
     if (state.gameState === STATE.STATUS) drawStatusScreen();
+    if (state.gameState === STATE.DEV_MODE) drawDevModeScreen();
     if (state.gameState === STATE.SETTINGS) drawSettingsScreen();
     if (state.gameState === STATE.GAME_OVER) drawGameOver();
     if (state.gameState === STATE.VICTORY) drawVictory();

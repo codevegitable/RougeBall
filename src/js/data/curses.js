@@ -14,7 +14,7 @@ export const CURSE_DATA = [
     { id: "shrink", name: "收缩", icon: "📏", tier: "normal", desc: (n) => `挡板宽度 -${n * 4}%` },
     { id: "hitbox", name: "臃肿", icon: "🎯", tier: "normal", desc: (n) => `受击面积 +${n * 8}%` },
     { id: "dense", name: "密林", icon: "🌿", tier: "normal", desc: (n) => `方块密度 +${n * 3}%` },
-    { id: "launch", name: "疾射", icon: "🏹", tier: "normal", desc: (n) => `发球速度 +${n * 6}%` },
+    { id: "launch", name: "疾射", icon: "🏹", tier: "normal", desc: (n) => `发射时球初始速度 +${n * 6}%（更难控制）` },
     { id: "sticky", name: "黏滞", icon: "🫧", tier: "normal", desc: (n) => `挡板响应 -${n * 10}%` },
     { id: "heal", name: "碎心", icon: "🩸", tier: "normal", desc: (n) => `治疗效果 -${n * 25}%` },
     { id: "misfortune", name: "霉运", icon: "🍂", tier: "normal", desc: (n) => `奖励选卡 -${n}` },
@@ -26,8 +26,8 @@ export const CURSE_DATA = [
     // ═══ 新增诅咒 ═══
     { id: "weakness", name: "虚弱", icon: "🦴", tier: "normal", desc: (n) => `球伤害额外 -${n}（与锈蚀独立）` },
     { id: "fog", name: "迷雾", icon: "🌫️", tier: "normal", desc: (n) => `暗角增强，视野缩小` },
-    { id: "decay", name: "震荡", icon: "💢", tier: "normal", desc: (n) => `每次击碎方块球速 -${n}%` },
-    { id: "echo", name: "诅咒回响", icon: "🔊", tier: "normal", desc: (n) => `诅咒可选项 -${n} 项` },
+    { id: "decay", name: "震荡", icon: "💢", tier: "normal", desc: (n) => `每次击碎方块球速 +${n * 1.5}%（每关重置，累计加速）` },
+    { id: "echo", name: "诅咒回响", icon: "🔊", tier: "normal", desc: (n) => `诅咒可选项 -${Math.min(n, 2)} 项` },
     { id: "thorn", name: "荆棘", icon: "🌵", tier: "normal", desc: (n) => `受击时额外扣 ${n * 0.5} 命` },
 ];
 

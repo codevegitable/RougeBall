@@ -325,11 +325,18 @@ function finalizeRewardStage() {
 // Boss 诅咒三选一
 function setupBossCurseSelect() {
     const bossCurses = [...BOSS_CURSES].sort(() => Math.random() - 0.5);
-    const penalty = state.player.curseChoicePenalty || 0;
-    state.curseChoices = bossCurses.slice(0, Math.max(1, 3 - penalty));
+    // 检查是否有强制诅咒（命运封印）— 如果有则只显示 1 项
+    const forcedIdx = bossCurses.findIndex(c => c.forced);
+    if (forcedIdx >= 0) {
+        const forced = bossCurses.splice(forcedIdx, 1)[0];
+        state.curseChoices = [forced];
+    } else {
+        const penalty = state.player.curseChoicePenalty || 0;
+        state.curseChoices = bossCurses.slice(0, Math.max(1, 3 - penalty));
+    }
     state.curseStrength = 1;
     state.gameState = STATE.CURSE_SELECT;
-    spawnFloatingText(400, 200, "选择一项 Boss 诅咒", PAL.blood3);
+    spawnFloatingText(400, 200, state.curseChoices.length === 1 ? "命运封印！强制诅咒" : "选择一项 Boss 诅咒", PAL.blood3);
 }
 
 function setupCurseSelect() {
@@ -530,7 +537,7 @@ export function pauseQuitToMenu() {
 }
 
 export function quitToMenu() {
-    saveProgress();
+    clearProgressSave();
     state.gameState = STATE.MENU;
 }
 

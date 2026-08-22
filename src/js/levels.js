@@ -1,14 +1,15 @@
 import { W, H, GRID_Y, BLOCK_GAP } from "./constants.js";
 import { mulberry32 } from "./utils.js";
 import { state } from "./state.js";
-import { BLOCK_SIZE_TABLE, HP_TABLE, ARMORED } from "./data/levels.js";
+import { BLOCK_SIZE_TABLE, HP_TABLE, HP_TIER, ARMORED, BLOCK_COUNT } from "./data/levels.js";
 
 // 方块尺寸随关卡递减（查表）
 function blockSizeFor(level) {
     for (const row of BLOCK_SIZE_TABLE) {
         if (level <= row.maxLevel) return { w: row.w, h: row.h };
     }
-    return { w: 54, h: 18 };
+    const last = BLOCK_SIZE_TABLE[BLOCK_SIZE_TABLE.length - 1];
+    return { w: last.w, h: last.h };
 }
 
 // 程序化关卡生成
@@ -20,34 +21,59 @@ export function generateLevel(num) {
     const maxRows = Math.floor((H - GRID_Y - 150) / (bh + gap));
     const rng = mulberry32(num * 1337 + 991);
 
-    // 目标方块数：第 1 关 10 个，后续递增
+    // 目标方块数：对数增长（见 data/levels.js 的 BLOCK_COUNT 说明）。
+    // 用对数而非线性，是为了抵消「血量档位 × 命中难度」的乘性增长，
+    // 让普通关的总难度落在直线上而不是凸曲线上。
     let target;
     if (num === 1) {
-        target = 10;
+        target = BLOCK_COUNT.base;
     } else {
-        target = Math.round((10 + (num - 1) * 1.3) * (0.85 + rng() * 0.3));
+        const grow = BLOCK_COUNT.base + BLOCK_COUNT.k * Math.log(1 + (num - 1) / BLOCK_COUNT.shift);
+        const jitter = 1 - BLOCK_COUNT.variance / 2 + rng() * BLOCK_COUNT.variance;
+        target = Math.round(grow * jitter);
     }
-    target = Math.min(target, Math.floor(cols * maxRows * 0.75));
+    target = Math.min(target, Math.floor(cols * maxRows * BLOCK_COUNT.capRatio));
 
-    // 血量档位（前 15 关固定 1HP，后续逐步提升）
-    const tier = num <= 15 ? 0 : Math.min(HP_TABLE.length - 1, Math.floor((num - 16) / 5));
+    // 血量档位：从 HP_TIER.startLevel 起每 step 关升一档。
+    // 原为"第 16 关起每 5 关一档"，前 15 关血量恒为 1，
+    // 前段难度斜率只有中段的 1/4，曲线成不了直线。
+    const tier = num < HP_TIER.startLevel
+        ? 0
+        : Math.min(HP_TABLE.length - 1, 1 + Math.floor((num - HP_TIER.startLevel) / HP_TIER.step));
 
-    // 前 3 关全部 1HP，不用概率表
-    const force1HP = num <= 3;
+    // 开局教学关全 1HP，不用概率表
+    const force1HP = num <= HP_TIER.force1HpUntil;
     const table = HP_TABLE[tier];
 
-    // 逐行填充分块，每行至少 2 个空隙
+    // 逐行填充分块，每行至少 2 个空隙。
+    //
+    // 空隙数原为 2 + floor(num/8)，随层数无上限增长：到 50 层是 8 个空隙，
+    // 而该层只有 12 列——每行仅剩 4 列可用，再乘 0.55 的填充率，
+    // 单行期望不到 2.2 个方块。这让实际方块数被死死压在 35 上下，
+    // 无论目标值给多大都填不满（实测 50 层目标 64、实放 35）。
+    // 结果是后段难度曲线被压平甚至回落，与"直线"目标相反。
+    //
+    // 改为按列数比例封顶（最多占 1/3 列，且不超过 4 个），
+    // 空隙的作用是留出球路，不该反过来成为难度的天花板。
     const grid = [];
     let placed = 0;
+    const gapCount = Math.min(
+        2 + Math.floor(num / 8),
+        Math.max(2, Math.floor(cols / 3)),
+        BLOCK_COUNT.maxGaps
+    );
+    // 填充率上限从 0.55 提到 0.70：0.55 在 lv23 就封顶，
+    // 与网格容量一起让后段方块数无法继续增长。
+    const fillP = num === 1
+        ? 0.6
+        : Math.min(BLOCK_COUNT.fillBase + (num - 1) * BLOCK_COUNT.fillPerLevel, BLOCK_COUNT.fillCap)
+          + (state.player.curseDensityBonus || 0);
     for (let r = 0; r < maxRows && placed < target; r++) {
         const row = [];
-        const gapCount = Math.min(2 + Math.floor(num / 8), Math.max(2, cols - 3));
         const gapCols = new Set();
         while (gapCols.size < gapCount) {
             gapCols.add(Math.floor(rng() * cols));
         }
-        // 第 1 关：只放 2 行，每行 5 个
-        const fillP = num === 1 ? 0.6 : Math.min(0.42 + (num - 1) * 0.006, 0.55) + (state.player.curseDensityBonus || 0);
         for (let c = 0; c < cols; c++) {
             if (gapCols.has(c)) { row.push(0); continue; }
             if (rng() > (num === 1 ? 0.65 : fillP)) { row.push(0); continue; }
@@ -56,6 +82,28 @@ export function generateLevel(num) {
             if (placed >= target) { /* 剩余填充 0 */ for (; c < cols - 1; c++) row.push(0); break; }
         }
         grid.push(row);
+    }
+
+    // 后处理：消除 1 格宽的口袋（两个纵向障碍之间只有 1 格通路时，移除该方块）
+    // 场景：某列 row[r][c] 非空，且 row[r-1][c] 也非空，且相邻列 row[r][c-1]/row[r][c+1]
+    // 为空但 row[r-1][c-1]/row[r-1][c+1] 非空 → 形成 1 格宽的纵向通道 → 移除方块
+    for (let r = 1; r < grid.length; r++) {
+        for (let c = 0; c < grid[r].length; c++) {
+            if (grid[r][c] === 0) continue;
+            // 上方有方块
+            if (grid[r - 1][c] === 0) continue;
+            // 检查左侧：c-1 为空但 c-1 上方有方块
+            if (c > 0 && grid[r][c - 1] === 0 && grid[r - 1][c - 1] > 0) {
+                grid[r][c] = 0;
+                placed--;
+                continue;
+            }
+            // 检查右侧：c+1 为空但 c+1 上方有方块
+            if (c < cols - 1 && grid[r][c + 1] === 0 && grid[r - 1][c + 1] > 0) {
+                grid[r][c] = 0;
+                placed--;
+            }
+        }
     }
     return grid;
 }
@@ -93,14 +141,14 @@ export function createBlocksFromGrid(grid, num = 1) {
                 : null;
             // 重甲砖：额外叠血量的硬点。不与移动方块叠加，避免"追着打又打不烂"
             const armored = !indestructible && !moving && rng() < armoredChance;
-            const hpBonus = (state.player.curseBlockHpBonus || 0) + (armored ? ARMORED.hpBonus : 0);
+            // 血量加成随层数增长：第 18 关 +2，每 6 关 +1，上限 +6
+            const armorBonus = armored ? Math.min(6, 2 + Math.floor((num - 18) / 6)) : 0;
+            const hpBonus = (state.player.curseBlockHpBonus || 0) + armorBonus;
             const totalHp = type + hpBonus;
 
             bl.push({
                 x, y, baseX: x, baseY: y, w: bw, h: bh,
                 hp: indestructible ? Infinity : totalHp,
-                // maxHp 记录实际总血量，裂纹与配色档位才能反映重甲砖的真实硬度。
-                // 不可击碎方块保持有限值，避免 Infinity 流入配色/计分运算。
                 maxHp: totalHp,
                 indestructible, moving, armored,
             });

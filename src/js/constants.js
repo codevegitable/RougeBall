@@ -37,6 +37,7 @@ export const STATE = {
     CURSE_SELECT: "curseSelect", // 诅咒三选一
     CODEX: "codex", // 图鉴：奖励/诅咒/事件数据
     STATUS: "status", // 角色状态总览
+    DEV_MODE: "devMode", // 开发者模式
     SETTINGS: "settings", // 设置
     GAME_OVER: "gameOver",
     VICTORY: "victory",

@@ -21,6 +21,8 @@ import { loadSaveData } from "./game.js";
 import { getHighScore, skinDef, getUnlocks, isRewardUnlocked, getSelectedSkin, SKIN_START_SKILLS } from "./unlocks.js";
 import { loadSettings, saveSettings, applySettings } from "./settings.js";
 import { GAME_CONFIG } from "./config.js";
+import { BOSS_CANDIDATES } from "./data/bosses.js";
+import { ARMORED } from "./data/levels.js";
 
 export { drawUI } from "./ui_hud.js";
 
@@ -1007,4 +1009,31 @@ export function drawVictory() {
         accent: PAL.gold1,
         restartLabel: "再来一局",
     });
+}
+
+// ═══ 开发者模式 ─────────────────────────────────────────────
+export function drawDevModeScreen() {
+    const modal = pModal(700, 520, "开发者模式", { icon: "tool", scrim: 0.88 });
+    const X0 = modal.x + PX * 3;
+    let y = modal.bodyY + PX * 2;
+    const L = 18;
+    pTextShadow("ESC 退出 · 数据文件位于 src/js/data/", X0, y, PAL.mist1, { size: 12, align: "left" });
+    y += L + 4;
+
+    const entries = [
+        ["Boss HP (15关)", String(BOSS_CANDIDATES[15]?.[0]?.hp), "铁壁执行者"],
+        ["Boss弹速 (15关)", String(BOSS_CANDIDATES[15]?.[0]?.bulletSpeed), "铁壁执行者"],
+        ["重甲概率上限", String(ARMORED.maxChance), "最大出现概率"],
+        ["重甲血量加成", String(ARMORED.hpBonus), "额外血量"],
+        ["诅咒强度系数", "lv×0.1", "每层诅咒强度增长"],
+        ["事件概率", String(GAME_CONFIG.event.chance), "事件房出现概率"],
+        ["音效音量", String(GAME_CONFIG.sound.volume), "主音量0~1"],
+    ];
+
+    for (const [label, value, desc] of entries) {
+        pTextShadow(label, X0, y, PAL.gold3, { size: 12, bold: true, align: "left" });
+        pTextShadow(value, X0 + 200, y, PAL.bone1, { size: 13, bold: true, align: "left" });
+        pTextShadow(desc, X0 + 350, y, PAL.mist1, { size: 11, align: "left" });
+        y += L + 2;
+    }
 }

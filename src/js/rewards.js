@@ -10,11 +10,11 @@ import { PAL } from "./palette.js";
 // ─── 数据与行为绑定 ───────────────────────────────────────
 // 奖励的即时生效效果（applyId → 函数）
 const APPLY_EFFECTS = {
-    lives1() { state.player.lives += 1; },
-    lives2() { state.player.lives += 2; },
+    lives1() { state.player.lives += 1 * (state.player.healMul || 1); },
+    lives2() { state.player.lives += 2 * (state.player.healMul || 1); },
     score500() { addScore(500); },
     score2000() { addScore(2000); },
-    crown() { state.player.lives += 3; addScore(500); },
+    crown() { state.player.lives += 3 * (state.player.healMul || 1); addScore(500); },
 };
 
 // 主动技能的释放效果（按技能 id）
@@ -143,10 +143,10 @@ export function recalcStats() {
     const bossDefeated = p.bossDefeated || 0;
     const rewardScale = Math.max(0.33, 1 - bossDefeated * 0.12);
     p.ballDamage = 1 + Math.round((n("power_ball") + n("mega_ball") * 2 + n("annihil_ball") * 3 + n("double_strike") * 2) * rewardScale);
-    p.ballSpeedMul = Math.pow(0.88, n("slow_ball")) * Math.pow(1.05, n("double_strike"));
+    p.ballSpeedMul = Math.pow(0.88, n("slow_ball")) * Math.pow(1.09, n("double_strike"));
     p.paddleBonus = (n("wider_paddle") * 0.25 + n("giant_paddle") * 0.5) * rewardScale;
     p.scoreMul = Math.pow(2, n("gold_soul"));
-    p.healChance = 0.025 * n("vampire") + 0.05 * n("vampiric_gem");
+    p.healChance = 0.015 * n("vampire") + 0.03 * n("vampiric_gem");
     p.bossResist = n("iron_will") > 0 ? 0.5 : 0;
     p.thorns = 5 * n("thorn_armor");
     p.maxPiercing = n("piercing");
@@ -198,6 +198,8 @@ export function recalcStats() {
     p.curseSecondDmgPenalty = 0;
     p.curseFog = 0;
     p.curseDecel = 0;
+    p.curseDecelPerLevel = 0;
+    p.curseDecayCounter = 0; // 震荡诅咒：每关累计击碎计数
     p.curseChoicePenalty = 0;
     p.curseExtraHitDmg = 0;
 
@@ -209,7 +211,7 @@ export function recalcStats() {
     }
 
     // 应用诅咒数值到最终属性
-    p.ballSpeedMul *= p.curseSpeedMul;
+    p.ballSpeedMul *= p.curseSpeedMul * (1 - p.curseDecelPerLevel);
     p.ballDamage = Math.max(1, p.ballDamage - p.curseDmgPenalty - p.curseSecondDmgPenalty);
     p.scoreMul *= p.curseScoreMul;
     p.skillCdMul *= p.curseCdMul;
@@ -218,6 +220,8 @@ export function recalcStats() {
     p.ballRadiusMul *= p.curseBallSizeMul;
     p.extraChoices = Math.max(0, p.extraChoices - p.curseLuckPenalty);
     p.lifesaverLeft = Math.max(0, p.lifesaverLeft - p.curseLuckPenalty * 0.2);
+    // 治疗效果减益
+    p.healMul = Math.max(0.05, 1 - (p.curseHealPenalty || 0));
     if (p.curseSkillSlotPenalty > 0) {
         while (p.skills.length > 1) p.skills.pop();
     }

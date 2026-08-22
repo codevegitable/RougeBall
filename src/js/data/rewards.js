@@ -67,10 +67,10 @@ export const REWARD_DATA = [
     { id: "bounce_shield", name: "弹射护盾", icon: "🛡️", rarity: "uncommon", type: "ability", maxStacks: 1, desc: "被弹幕击中时 15% 概率反弹子弹" },
     { id: "swift_move", name: "疾风步", icon: "💨", rarity: "common", type: "bonus", maxStacks: 3, desc: "挡板响应速度 +15%" },
     { id: "life_siphon", name: "生命虹吸", icon: "🩸", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "每击碎 15 个方块回复 0.1 生命" },
-    { id: "double_strike", name: "与我一战", icon: "⚡", rarity: "common", type: "bonus", maxStacks: 3, desc: "球伤害 +2，球速度 +5%" },
+    { id: "double_strike", name: "与我一战", icon: "⚡", rarity: "common", type: "bonus", maxStacks: 3, desc: "球伤害 +2，球速度 +9%" },
     { id: "lucky_charm", name: "幸运护符", icon: "🍀", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "稀有奖励概率 +5%" },
     // ═══ 解锁奖励 ═══
-    { id: "guardian_core", name: "守护核心", icon: "🛡️", rarity: "rare", type: "ability", maxStacks: 1, tierLock: 0, desc: "每关开始获得 2 秒能量护盾" },
+    { id: "guardian_core", name: "守护核心", icon: "🛡️", rarity: "uncommon", type: "ability", maxStacks: 1, tierLock: 0, desc: "每关开始获得 2 秒能量护盾" },
     { id: "greed_eye", name: "贪婪之眼", icon: "👁️", rarity: "uncommon", type: "ability", maxStacks: 2, tierLock: 0, desc: "击碎方块额外获得 +50% 分数" },
     { id: "vampiric_gem", name: "吸血宝石", icon: "💎", rarity: "rare", type: "ability", maxStacks: 1, tierLock: 1, desc: "击碎方块时 3% 概率恢复 1 生命" },
     { id: "rapid_cooling", name: "极速制冷", icon: "❄️", rarity: "uncommon", type: "bonus", maxStacks: 3, tierLock: 1, desc: "技能冷却额外 -15%" },

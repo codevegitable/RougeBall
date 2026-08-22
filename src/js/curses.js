@@ -26,8 +26,8 @@ const CURSE_EFFECTS = {
     // 新增诅咒
     weakness(n, p) { p.curseSecondDmgPenalty += n; },
     fog(n, p) { p.curseFog = Math.min(1, (p.curseFog || 0) + n * 0.15); },
-    decay(n, p) { p.curseDecel += n * 0.02; },
-    echo(n, p) { p.curseChoicePenalty += n; },
+    decay(n, p) { p.curseDecelPerLevel += n * 0.015; },
+    echo(n, p) { p.curseChoicePenalty += Math.min(n, 2); },
     thorn(n, p) { p.curseExtraHitDmg += n * 0.5; },
     // Boss 诅咒
     void_mark(n, p) { p.curseBulletExtraDmg += 1; },
@@ -71,6 +71,7 @@ export function rollCursePool(level = 1) {
         ethereal: (p.maxPiercing || 0) <= 0,        // 穿透已为0
         shrink: (p.paddleBonus || 0) <= -0.5,       // 挡板已缩到最小
         rust: (p.ballDamage || 1) <= 1,             // 伤害已为1
+        echo: (p.curseChoicePenalty || 0) >= 2,     // 诅咒可选项已到最低
     };
     return CURSES.filter((c) => {
         if (c.id === "slowfall") return false;
