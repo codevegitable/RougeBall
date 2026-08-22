@@ -26,6 +26,15 @@ import {
 } from "./ui.js";
 
 // ─── 挡板：石质符文平台 ───────────────────────────────────
+//
+// 核心受击区 vs 加宽翼的区分是这块美术的首要任务：
+// 只有核心区会被敌弹判定（见 physics.paddleHitRect），翼区纯粹用来接球。
+// 原实现两者同色，仅靠顶部两个金色小刻痕区分——4px 的刻痕在实战里根本看不见。
+//
+// 现在用三重手段拉开差距：
+//   ① 材质分离——翼区改用冷石灰（stone），核心区保留皮肤本色，色相与明度双重对比；
+//   ② 呼吸光——核心区顶面有一条随时间明暗起伏的高光条，动态元素在余光里最抓眼；
+//   ③ 硬边界——核心区两端各一条贯穿板高的金色竖线 + 上方箭头刻痕，边界位置零歧义。
 export function drawPaddle() {
     if (!state.paddle) return;
     const sk = skinDef(getSelectedSkin()) || DEFAULT_SKIN_COLORS;
@@ -40,35 +49,85 @@ export function drawPaddle() {
         ctx.globalAlpha = 0.4;
     }
 
+    // 核心受击区几何（与 physics.paddleHitRect 保持同一套公式）。
+    //
+    // 注意：受击区可能比挡板本体更宽——"收缩"诅咒能把 paddleBonus 压到 -0.5
+    // （宽度 55px），而"臃肿"诅咒同时把受击宽度推到 110px 以上。此时整块板
+    // 都在受击范围内，没有安全翼区，必须夹持绘制范围，否则核心色会溢出板外，
+    // 玩家会以为挡板变宽了。
+    // 先各自 snap 到网格再夹持，而不是夹持后再 snap——后者的舍入会把右边缘
+    // 推出板外一格（实测 3 例溢出）。
+    const baseW = PADDLE_BASE_W * (1 + (state.player.curseHitPenalty || 0));
+    const coreX = Math.max(x, snap(p.x + (p.width - baseW) / 2));
+    const coreR = Math.min(x + w, snap(p.x + (p.width + baseW) / 2));
+    const coreW = Math.max(PX, coreR - coreX);
+    const hasWings = p.width > baseW + PX;
+
     // 硬黑轮廓
     pRect(x - PX, y - PX, w + PX * 2, h + PX * 2, PAL.ink0);
-    // 主体：上亮下暗的三段式，替代线性渐变
-    pRect(x, y, w, h, base);
-    pRect(x, y, w, PX, light);                    // 顶部高光
-    pRect(x, y + h - PX, w, PX, PAL.ink1);        // 底部阴影
-    pRect(x, y + PX, PX, h - PX * 2, light);      // 左侧亮边
-    pRect(x + w - PX, y + PX, PX, h - PX * 2, PAL.ink1);
 
-    // 中央符文槽：三个等距凹点，纯装饰但强化"平台"的实体感
-    const runeCount = Math.max(3, Math.floor(w / (PX * 12)));
-    for (let i = 0; i < runeCount; i++) {
-        const rx = snap(x + (w / (runeCount + 1)) * (i + 1) - PX);
-        pRect(rx, y + PX * 2, PX * 2, h - PX * 4, PAL.ink1);
+    // ① 翼区底材：暗石。核心区随后覆盖在其上。
+    //
+    // 用 stone0 而非 stone1：实测 stone1 的亮度（65）与"默认"皮肤的 paddle1
+    // #633a86（72）和"绯红"皮肤 #8c2e38（67）几乎相同，翼区与核心区糊成一片。
+    // stone0 把翼区压到亮度 ~45，对四套皮肤都留出足够落差。
+    // 翼区不参与受击，视觉上要"退后"，所以不给高饱和色也不给呼吸光。
+    pRect(x, y, w, h, PAL.stone0);
+    pRect(x, y, w, PX, PAL.stone1);               // 顶部微高光（比核心区暗得多）
+    pRect(x, y + h - PX, w, PX, PAL.ink0);        // 底部阴影
+    pRect(x, y + PX, PX, h - PX * 2, PAL.stone1);
+    pRect(x + w - PX, y + PX, PX, h - PX * 2, PAL.ink0);
+
+    // 翼区斜纹：低对比对角线，读作"这里是延展出的托板，不是本体"
+    if (hasWings) {
+        drawWingHatch(x, y, coreX, h);
+        drawWingHatch(coreX + coreW, y, x + w, h);
     }
 
-    // 核心受击区（PADDLE_BASE_W + 诅咒惩罚）：用金色端刻标记，不用虚线
-    const baseW = PADDLE_BASE_W * (1 + (state.player.curseHitPenalty || 0));
-    const bx = snap(p.x + (p.width - baseW) / 2);
-    const bw = snap(baseW);
-    pRect(bx, y - PX, PX, PX, PAL.gold2);
-    pRect(bx + bw - PX, y - PX, PX, PX, PAL.gold2);
-    pRect(bx, y - PX * 2, PX * 2, PX, PAL.gold3);
-    pRect(bx + bw - PX * 2, y - PX * 2, PX * 2, PX, PAL.gold3);
+    // ② 核心受击区主体：皮肤本色，明度与饱和度都高于翼区
+    pRect(coreX, y, coreW, h, base);
+    pRect(coreX, y + h - PX, coreW, PX, PAL.ink1);
 
-    // 击球闪白
+    // 呼吸光：顶面高光条在 light ↔ bone1 之间起伏。
+    // 用 state.time（帧计数）而非 Date.now()，暂停时呼吸也跟着停，
+    // 且与游戏的时间缩放一致，不会在慢动作里显得突兀。
+    const breath = 0.5 + 0.5 * Math.sin(state.time * 0.055);
+    pRect(coreX, y, coreW, PX, breath > 0.5 ? PAL.bone1 : light);
+    pRect(coreX, y + PX, coreW, PX, light);
+    // 呼吸最亮的相位再往板外溢一格光，形成"核心在发亮"的观感
+    if (breath > 0.72) {
+        ctx.fillStyle = rgba(PAL.bone1, (breath - 0.72) * 1.4);
+        ctx.fillRect(coreX, y - PX * 2, coreW, PX);
+    }
+
+    // 中央符文槽：只画在核心区内，强化"这一段才是本体"
+    const runeCount = Math.max(3, Math.floor(coreW / (PX * 12)));
+    for (let i = 0; i < runeCount; i++) {
+        const rx = snap(coreX + (coreW / (runeCount + 1)) * (i + 1) - PX);
+        pRect(rx, y + PX * 3, PX * 2, h - PX * 5, PAL.ink1);
+    }
+
+    // ③ 边界：贯穿板高的金色竖线，两端各一条。
+    //    这是核心区与翼区之间唯一的硬边，玩家靠它判断"弹幕会不会打到我"。
+    if (hasWings) {
+        pRect(coreX - PX, y, PX, h, PAL.gold1);
+        pRect(coreX, y, PX, h, PAL.gold3);
+        pRect(coreX + coreW - PX, y, PX, h, PAL.gold3);
+        pRect(coreX + coreW, y, PX, h, PAL.gold1);
+
+        // 上方箭头刻痕：指向内侧，明确"受击区在这两标记之间"
+        drawCoreTick(coreX, y, 1);
+        drawCoreTick(coreX + coreW - PX, y, -1);
+    } else {
+        // 无安全翼区：整块板都会被弹幕判定。用整圈金框替代两条竖线，
+        // 让"全板暴露"成为一个独立可读的状态，而不是"看不到边界所以以为很安全"。
+        pStroke(coreX, y, coreW, h, PAL.gold2, 1);
+    }
+
+    // 击球闪白：只闪核心区，让"接到球"的反馈和受击区绑定
     if (p.flash > 0.02) {
         ctx.fillStyle = rgba(PAL.bone1, p.flash * 0.75);
-        ctx.fillRect(x, y, w, h);
+        ctx.fillRect(coreX, y, coreW, h);
     }
 
     // 受击红框
@@ -85,31 +144,72 @@ export function drawPaddle() {
     }
 }
 
+// 翼区斜纹：每 3 格一道对角线。用 ink1（比翼区底材 stone0 暗一档）
+// 而非 alpha 混合，保证在任何皮肤配色下都是同一个"非受击区"的视觉语言。
+function drawWingHatch(x0, y, x1, h) {
+    const step = PX * 3;
+    ctx.fillStyle = PAL.ink1;
+    for (let sx = snap(x0); sx < x1; sx += step) {
+        for (let row = 0; row < Math.floor(h / PX) - 1; row++) {
+            const px = sx + row * PX;
+            if (px < x0 || px + PX > x1) continue;
+            ctx.fillRect(px, y + PX + row * PX, PX, PX);
+        }
+    }
+}
+
+// 核心区端点刻痕：板上方一个朝内的三格阶梯箭头
+function drawCoreTick(bx, y, dir) {
+    for (let i = 0; i < 3; i++) {
+        const w = PX * (3 - i);
+        const px = dir > 0 ? bx : bx + PX - w;
+        pRect(px, y - PX * (2 + i), w, PX, i === 0 ? PAL.gold3 : PAL.gold2);
+    }
+}
+
 // ─── 球：像素宝珠 ─────────────────────────────────────────
 export function drawBalls() {
     for (let i = 0; i < state.balls.length; i++) {
         const b = state.balls[i];
-        const isMain = i === 0;
+        // 主球按身份标记着色，而非数组下标：主球身份固定，
+        // 副球落地导致数组重排时金色不会跳到别的球上。
+        const isMain = !!b.isMain;
         // 中毒：整颗球转紫，玩家一眼能看出伤害为什么变低。
         // 免疫窗口内球缘留一圈苔绿，提示"现在可以安全穿毒圈"。
         const poisoned = b.poisonTimer > 0;
+        // 四段明度坡：白热核心 → 亮色 → 主色 → 暗边。
+        // 原实现最亮只到 gold3/arc3，球整体偏灰；加一段 bone1 白热核心后
+        // 球体在暗色地牢背景上的对比度显著提升，且不引入调色板外的新色。
+        const hot = poisoned ? PAL.bone0 : PAL.bone1;
         const core = poisoned ? PAL.vio3 : isMain ? PAL.gold3 : PAL.arc3;
         const mid = poisoned ? PAL.vio2 : isMain ? PAL.gold2 : PAL.arc2;
         const edge = poisoned ? PAL.vio1 : isMain ? PAL.gold1 : PAL.arc1;
 
-        // 拖尾：逐渐变小的像素方块
+        // 拖尾：从暗到亮的光带。
+        //   ① 尺寸不再随 life 线性缩到 1px——最小保底 PX*1.5，尾段仍可见；
+        //   ② alpha 上限从 0.5 提到 0.85，尾段整体更实；
+        //   ③ 分三档取色（edge → mid → core），拖尾自带明度梯度，
+        //      读起来是一条有方向的光带，而不是一串同色小方块。
         for (let t = 0; t < b.trail.length; t++) {
             const tr = b.trail[t];
-            if (tr.life <= 0.15) continue;
-            const s = Math.max(PX, Math.round((b.radius * 0.7 * tr.life) / PX) * PX);
-            ctx.fillStyle = rgba(tr.life > 0.6 ? mid : edge, tr.life * 0.5);
+            if (tr.life <= 0.08) continue;
+            const s = Math.max(PX * 1.5, Math.round((b.radius * (0.45 + tr.life * 0.55)) / PX) * PX);
+            const col = tr.life > 0.7 ? core : tr.life > 0.4 ? mid : edge;
+            ctx.fillStyle = rgba(col, Math.min(0.85, tr.life * 0.95));
             ctx.fillRect(Math.round(tr.x - s / 2), Math.round(tr.y - s / 2), s, s);
         }
 
-        // 球体：外圈 + 主体 + 左上高光
+        // 外发光：球缘外一圈半透明主色，把球从背景里"托起来"。
+        // 用 pCircle + globalAlpha 而非 ctx.arc，保持像素网格对齐（不产生抗锯齿边）。
+        ctx.globalAlpha = 0.22;
+        pCircle(b.x, b.y, b.radius + PX * 1.5, core);
+        ctx.globalAlpha = 1;
+
+        // 球体：暗边 → 主色 → 亮色 → 白热高光
         pCircle(b.x, b.y, b.radius, edge);
         pCircle(b.x, b.y, b.radius - PX * 0.5, mid);
-        pRectRaw(b.x - b.radius * 0.5, b.y - b.radius * 0.5, PX * 2, PX * 2, core);
+        pCircle(b.x, b.y, b.radius - PX * 1.5, core);
+        pRectRaw(b.x - b.radius * 0.45, b.y - b.radius * 0.55, PX * 2, PX * 2, hot);
 
         // 中毒剩余时间：球上方一道短进度条，让玩家知道还有多久恢复
         if (poisoned) {
@@ -136,7 +236,7 @@ export function drawBlocks() {
             continue;
         }
 
-        const tier = BLOCK_TIERS[Math.min(bl.maxHp - 1, 3)];
+        const tier = BLOCK_TIERS[Math.max(0, Math.min(bl.maxHp - 1, BLOCK_TIERS.length - 1))];
 
         // 落地阴影：所有方块统一在右下投一格暗影。
         // 地板砖本身有明暗变化，仅靠 1px 黑轮廓不足以把方块从背景里拎出来；
@@ -164,11 +264,9 @@ export function drawBlocks() {
             drawCracks(x, y, w, h, bl.hp / bl.maxHp, tier.shadow);
         }
 
-        // 射手方块：底部炮口
-        if (bl.shooter) {
-            const cx = snap(x + w / 2 - PX);
-            pRect(cx, y + h - PX, PX * 2, PX * 2, PAL.ember2);
-            pRect(cx, y + h, PX * 2, PX, PAL.ember3);
+        // 重甲砖：四角铆钉 + 中央加固十字，读作"包了铁皮的砖"
+        if (bl.armored) {
+            drawArmorPlating(x, y, w, h);
         }
 
         // 移动方块：两侧箭头刻痕
@@ -216,6 +314,34 @@ function drawMetalBlock(x, y, w, h) {
     const rv = [[PX * 2, PX * 2], [w - PX * 3, PX * 2], [PX * 2, h - PX * 3], [w - PX * 3, h - PX * 3]];
     for (const [dx, dy] of rv) {
         pRect(x + dx, y + dy, PX, PX, PAL.bone0);
+    }
+}
+
+// 重甲砖标记：四角铆钉 + 中央竖向加固条。
+//
+// 用铆钉而非整片覆盖，是为了不盖住血量档位的主体色——玩家仍要靠底色判断
+// 还剩几下，铆钉只叠加"这块被加固过"的信息。铆钉用 stone3/mist0 的冷金属色，
+// 与任何血量档位的暖色主体都有色相差，不会糊成一团。
+function drawArmorPlating(x, y, w, h) {
+    const R = PX * 2;                    // 铆钉边长
+    const inset = PX * 2;                // 距方块轮廓的内缩
+    const corners = [
+        [x + inset, y + inset],
+        [x + w - inset - R, y + inset],
+        [x + inset, y + h - inset - R],
+        [x + w - inset - R, y + h - inset - R],
+    ];
+    for (const [cx, cy] of corners) {
+        pRect(cx, cy, R, R, PAL.stone3);
+        pRect(cx, cy, R - PX, R - PX, PAL.mist0);   // 左上高光
+        pRect(cx + PX, cy + PX, PX, PX, PAL.stone0); // 右下凹陷
+    }
+
+    // 中央加固条：竖向双线，暗示"内里还有一层钢板"
+    if (w >= PX * 10) {
+        const mx = snap(x + w / 2 - PX);
+        pRect(mx, y + inset, PX, h - inset * 2, PAL.stone3);
+        pRect(mx + PX, y + inset, PX, h - inset * 2, PAL.stone0);
     }
 }
 

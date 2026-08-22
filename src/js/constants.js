@@ -12,8 +12,9 @@ export const COLORS = {
     paddle2: PAL.vio2,
     ball: PAL.bone1,
     ballGlow: PAL.gold2,
-    blockColors: [PAL.moss2, PAL.ember2, PAL.blood2, PAL.vio2],
-    blockGlow: [PAL.moss3, PAL.ember3, PAL.blood3, PAL.vio3],
+    // 1HP → 6HP，后两档为重甲砖（秘蓝 / 暖金）
+    blockColors: [PAL.moss2, PAL.ember2, PAL.blood2, PAL.vio2, PAL.arc2, PAL.gold2],
+    blockGlow: [PAL.moss3, PAL.ember3, PAL.blood3, PAL.vio3, PAL.arc3, PAL.gold3],
     unbreakable: PAL.stone1,
     ui: PAL.bone0,
     uiDim: PAL.mist0,

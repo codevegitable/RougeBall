@@ -141,6 +141,8 @@ export function resetBall() {
             blockHits: 0,
             poisonTimer: 0,
             poisonImmune: 0,
+            // 主球（金色球）。身份固定：落地即扣血并回到挡板，永不由分裂球顶替。
+            isMain: true,
         },
     ];
 }
@@ -169,6 +171,7 @@ export function loadLevel(num, skipCurse = false) {
 
 // ─── 流程：开局 ───────────────────────────────────────────
 export function startGameRun() {
+    clearProgressSave();
     resetPlayer();
     // 给予皮肤开场技能（从 REWARD_MAP 中查找）
     const skinIdx = getSelectedSkin();
@@ -601,10 +604,8 @@ export function update(ts = 0) {
             endChallenge(false, broke);
             return;
         }
-        if (state.balls.length === 0) {
-            loseLife(1);
-            if (state.gameState === STATE.PLAYING) resetBall();
-        }
+        // 扣血由 physics 的主球落地分支负责，这里只做兜底补球
+        ensureMainBall();
         return;
     }
 
@@ -623,12 +624,20 @@ export function update(ts = 0) {
         return;
     }
 
-    if (state.balls.length === 0) {
-        loseLife(1);
-        if (state.gameState === STATE.PLAYING) {
-            resetBall();
-        }
-    }
+    // 普通关：主球落地的扣血已在 physics 内结算（主球身份固定，落地即扣血后归位）。
+    // 这里只兜底——若因任何原因场上没有主球了，补一颗回来，不再重复扣血。
+    ensureMainBall();
+}
+
+// 场上必须始终有一颗主球。
+//
+// 正常流程下 physics 的主球落地分支已把主球放回挡板，这里不会命中；
+// 只有异常状态（例如外部逻辑清空了球数组）才走到。刻意不做"提升副球为主球"，
+// 那正是本次要移除的旧机制——主球身份自始至终不转移。
+function ensureMainBall() {
+    if (state.gameState !== STATE.PLAYING) return;
+    if (state.balls.some((b) => b.isMain)) return;
+    resetBall();
 }
 
 function tickTimers() {

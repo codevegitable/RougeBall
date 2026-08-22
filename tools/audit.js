@@ -15,7 +15,7 @@ import { initStars } from "../src/js/stars.js";
 import { initPixelMode } from "../src/js/pixel.js";
 import { resetPlayer, resetPaddle, resetBall, startGameRun, loadLevel } from "../src/js/game.js";
 import { updateBalls, ballDamageOf } from "../src/js/physics.js";
-import { REWARDS } from "../src/js/rewards.js";
+import { REWARDS, recalcStats } from "../src/js/rewards.js";
 import { CURSES } from "../src/js/curses.js";
 import { EVENTS } from "../src/js/events.js";
 import { createBoss } from "../src/js/boss.js";
@@ -28,6 +28,7 @@ import {
     hitRewardCard, hitSkipButton, hitPauseResume, hitPauseQuit, hitPauseCodexButton,
     hitCodexTab, hitSettingsBackButton, hitCurseCard, hitEventChoiceIndex,
     hitRestartButton, hitGameOverExitButton, debugHitRects, debugLastModal,
+    drawStatusScreen, hitStatusTab, hitStatusBack, setStatusTab, debugStatusBounds, setStatusPage, getStatusPage,
 } from "../src/js/ui.js";
 
 const lines = [];
@@ -74,6 +75,40 @@ function hasColor(data, hex, x0, y0, x1, y1) {
         }
     }
     return false;
+}
+
+// 文字行间距：找出区域内所有含文字色的横向条带，返回条带数与最小间隔。
+//
+// 同一行文字的升部/降部/标点会被拆成多个条带（"技"的撇和"能"的竖各成一段），
+// 间隔 <=2px 的条带视为同一行合并——否则测出来的最小值永远是行内碎片间距，
+// 反映不出"两行字挤在一起"这个真正要防的问题。
+const TEXT_COLORS = ["#f4eee2", "#ded3c4", "#b0a4b8", "#8d8199", "#f07d84", "#f7dc8c", "#cfa0e4", "#9fb4f0"];
+function textLineGaps(data, x0, y0, x1, y1) {
+    const want = TEXT_COLORS.map((h) => parseInt(h.slice(1), 16));
+    const rowHasText = (y) => {
+        for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) {
+            const o = (y * W + x) * 4;
+            const v = (data[o] << 16) | (data[o + 1] << 8) | data[o + 2];
+            if (want.includes(v)) return true;
+        }
+        return false;
+    };
+    const bands = [];
+    let st = null;
+    for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) {
+        const t = rowHasText(y);
+        if (t && st === null) st = y;
+        else if (!t && st !== null) { bands.push([st, y - 1]); st = null; }
+    }
+    if (st !== null) bands.push([st, Math.min(H, y1) - 1]);
+    const merged = [];
+    for (const b of bands) {
+        if (merged.length && b[0] - merged[merged.length - 1][1] - 1 <= 2) merged[merged.length - 1][1] = b[1];
+        else merged.push([b[0], b[1]]);
+    }
+    let min = Infinity;
+    for (let i = 1; i < merged.length; i++) min = Math.min(min, merged[i][0] - merged[i - 1][1] - 1);
+    return { lines: merged.length, min: merged.length < 2 ? Infinity : min };
 }
 
 // 主色漂移检测：占比 >0.4% 的颜色必须在调色板内
@@ -188,6 +223,7 @@ function run() {
     bulletChecks(nearBlackRatio);
     blockContrastChecks();
     poisonZoneChecks();
+    statusScreenChecks();
 
     // 3. 各弹窗
     state.levelChoices = REWARDS.slice(0, 3);
@@ -494,6 +530,144 @@ function poisonZoneChecks() {
     state.bossDangerZones = [];
     state.player.level = 1;
     resetBall();
+}
+
+// ── 角色状态：分页 + 满配不溢出 ─────────────────────────
+// 背景：原实现把数值/技能/能力/诅咒四段顺序堆进一个 520px 面板，
+// 能力最多 24 条、诅咒最多 36 条，中期就溢出 122px、满配溢出 682px，
+// 文字互相重叠。改为四个 tab，每页只画自己那类，超出显示计数提示。
+function statusScreenChecks() {
+    const abilities = REWARDS.filter((r) => r.type === "ability");
+    const skills = REWARDS.filter((r) => r.type === "skill");
+
+    // 满配：拿满所有能力与诅咒，这是布局的最坏情况
+    const loadMax = () => {
+        startGameRun();
+        const p = state.player;
+        p.level = 50; p.lives = 12; p.score = 99990;
+        p.perks = {};
+        for (const a of abilities) p.perks[a.id] = a.maxStacks || 1;
+        p.skills = skills.slice(0, 2).map((s) => ({ id: s.id, cd: 0 }));
+        p.curses = CURSES.map((c) => ({ id: c.id, count: 3 }));
+        recalcStats();
+        state.gameState = STATE.STATUS;
+    };
+
+    for (const [tabIdx, tabName] of [[0, "数值"], [1, "技能"], [2, "能力"], [3, "诅咒"]]) {
+        loadMax();
+        setStatusTab(tabIdx);
+        render();
+        const d = snapshot();
+        const m = debugLastModal();
+        if (!m) { check(`状态-${tabName}：无面板记录`, false); continue; }
+
+        // ① 面板在画面内
+        check(`状态-${tabName}：面板 ${m.w}x${m.h} 在画面内`,
+            m.x >= 0 && m.y >= 0 && m.x + m.w <= W && m.y + m.h <= H);
+
+        // ② 内容不溢出面板底部（几何判断，见 ui.js 的 statusBounds 注释）
+        const sb = debugStatusBounds();
+        if (!sb) { check(`状态-${tabName}：无内容边界记录`, false); continue; }
+        check(`状态-${tabName}：满配内容底边 ${sb.maxY} <= 可用下限 ${sb.limit}`,
+            sb.maxY <= sb.limit);
+
+        // ③ 该页真的画了内容
+        check(`状态-${tabName}：内容非空`,
+            fillRatio(d, m.x + 10, m.y + 60, m.x + m.w - 10, m.y + m.h - 60) > 0.5);
+
+        // ④ 文字不挤在一起：任意两行文字之间至少留 3px 空白
+        const gaps = textLineGaps(d, m.x + 20, m.y + 70, m.x + m.w - 20, sb.limit);
+        check(`状态-${tabName}：${gaps.lines} 行文字最小行间距 ${gaps.min}px >= 3`,
+            gaps.lines < 2 || gaps.min >= 3);
+
+        // ⑤ tab 栏四个按钮都记录了命中矩形，且当前页高亮
+        const tabs = debugHitRects().statusTabs;
+        check(`状态-${tabName}：4 个 tab 命中矩形已记录`, tabs && tabs.length === 4);
+
+        // ⑥ 点击每个 tab 都能命中对应索引，且不误触相邻 tab
+        if (tabs && tabs.length === 4) {
+            let ok = true;
+            for (let i = 0; i < 4; i++) {
+                const r = tabs[i];
+                if (hitStatusTab(r.x + r.w / 2, r.y + r.h / 2) !== i) ok = false;
+            }
+            check(`状态-${tabName}：每个 tab 命中自身索引`, ok);
+            // tab 之间不重叠
+            let overlap = false;
+            for (let i = 1; i < 4; i++) {
+                if (tabs[i].x < tabs[i - 1].x + tabs[i - 1].w) overlap = true;
+            }
+            check(`状态-${tabName}：tab 之间不重叠`, !overlap);
+        }
+    }
+
+    // 空配置：刚开局什么都没有，四页都要有占位提示而不是空白
+    for (const [tabIdx, tabName] of [[1, "技能"], [2, "能力"], [3, "诅咒"]]) {
+        startGameRun();
+        state.player.perks = {}; state.player.skills = []; state.player.curses = [];
+        recalcStats();
+        state.gameState = STATE.STATUS;
+        setStatusTab(tabIdx);
+        render();
+        const m = debugLastModal();
+        check(`状态-${tabName}(空)：有占位提示`,
+            hasColor(snapshot(), PAL.mist0, m.x, m.y + 60, m.x + m.w, m.y + m.h - 60));
+    }
+
+    // 翻页：满配时每一条都必须能翻到，不能只显示前 14 条
+    for (const [tabIdx, tabName, total] of [[2, "能力", abilities.length], [3, "诅咒", CURSES.length]]) {
+        loadMax();
+        setStatusTab(tabIdx);
+        render();
+        const first = debugStatusBounds();
+        let pages = 1;
+        // 一路往后翻，直到页码不再变化
+        let guard = 0, prev = -1;
+        while (guard++ < 20) {
+            setStatusPage(1);
+            render();
+            if (getStatusPage() === prev) break;
+            prev = getStatusPage();
+            pages = prev + 1;
+        }
+        const perPage = 14;
+        check(`状态-${tabName}：${total} 项可翻 ${pages} 页，覆盖 ${pages * perPage} >= ${total}`,
+            pages * perPage >= total);
+        // 末页内容仍在面板内
+        const last = debugStatusBounds();
+        check(`状态-${tabName}：末页内容底边 ${last.maxY} <= ${last.limit}`, last.maxY <= last.limit);
+        // 翻回首页
+        for (let i = 0; i < 20; i++) setStatusPage(-1);
+        render();
+        check(`状态-${tabName}：可翻回首页`, getStatusPage() === 0);
+        // 切 tab 后页码归零，避免停在空页
+        setStatusTab(1);
+        check(`状态-${tabName}：切分页后页码归零`, getStatusPage() === 0);
+    }
+
+    // 返回按钮可命中
+    startGameRun();
+    state.gameState = STATE.STATUS;
+    setStatusTab(0);
+    render();
+    const back = debugHitRects().statusBack;
+    check("状态-返回按钮已记录", !!back);
+    if (back) {
+        check("状态-返回按钮中心可命中", hitStatusBack(back.x + back.w / 2, back.y + back.h / 2));
+        check("状态-返回按钮外部不误触", !hitStatusBack(back.x - 30, back.y - 30));
+    }
+
+    // 图标必须是点阵字形，不能是 emoji：
+    // 数据文件里 icon 存的是 "⚡"/"❤️"，若直接当文字画会渲染成系统 emoji。
+    // 判据：技能页内不应出现大面积非调色板色（emoji 是多色位图）。
+    loadMax();
+    setStatusTab(1);
+    render();
+    const drift = paletteDrift(snapshot());
+    check(`状态-技能页无 emoji 位图${drift.length ? " → " + drift.join(" ") : ""}`, drift.length === 0);
+
+    state.gameState = STATE.PLAYING;
+    setStatusTab(0);
 }
 
 function centerHit(name, drawFn, hitFn, pick) {

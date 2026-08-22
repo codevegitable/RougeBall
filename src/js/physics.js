@@ -1,4 +1,4 @@
-import { W, H, COLORS, MAX_BALLS, BALL_BASE_SPEED, PADDLE_BASE_W, BALL_BLOCK_ACCEL, BALL_SPEED_CAP } from "./constants.js";
+import { W, H, COLORS, MAX_BALLS, BALL_BASE_SPEED, PADDLE_BASE_W, BALL_BLOCK_ACCEL, BALL_SPEED_CAP, STATE } from "./constants.js";
 import { state, addScore, loseLife } from "./state.js";
 import { spawnParticles } from "./particles.js";
 import { screenShake, hitStop, flashPaddle, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
@@ -10,7 +10,6 @@ import {
     playBlockHit,
     playBlockBreak,
     playBallLost,
-    playBossShoot,
     playPlayerHit,
     playHeal,
 } from "./sound.js";
@@ -36,7 +35,9 @@ export function updatePaddle() {
     state.paddle.x = Math.max(-wing, Math.min(W - base - wing, state.paddle.x));
 }
 
-// ─── 移动 / 攻击方块的更新与敌弹 ──────────────────────────
+// ─── 移动方块的更新与残留敌弹 ──────────────────────────────
+// 普通关的方块不再发射子弹（射手方块已移除，改为重甲砖）。
+// enemyBullets 仍保留：Boss 关的场地机制仍可能往里推弹，此处统一负责推进与清理。
 export function updateEnemies() {
     if (state.player.freezeTimer > 0) return;
     const dt = state.dt;
@@ -45,26 +46,6 @@ export function updateEnemies() {
         if (bl.moving) {
             bl.moving.phase += bl.moving.speed * dt;
             bl.x = Math.max(2, Math.min(W - bl.w - 2, bl.baseX + Math.sin(bl.moving.phase) * bl.moving.amp));
-        }
-        if (bl.shooter) {
-            bl.shooter.tick--;
-            if (bl.shooter.tick <= 0) {
-                bl.shooter.tick = bl.shooter.interval;
-                const cx = bl.x + bl.w / 2;
-                const cy = bl.y + bl.h;
-                const px = state.paddle.x + state.paddle.width / 2;
-                const py = state.paddle.y;
-                const ang = Math.atan2(py - cy, px - cx);
-                const spd = 2.0 + Math.min(0.6, state.player.level * 0.01);
-                state.enemyBullets.push({
-                    x: cx,
-                    y: cy,
-                    vx: Math.cos(ang) * spd,
-                    vy: Math.sin(ang) * spd,
-                    r: 5,
-                });
-                playBossShoot();
-            }
         }
     }
 
@@ -260,13 +241,15 @@ export function updateBalls() {
     for (let i = balls.length - 1; i >= 0; i--) {
         const b = balls[i];
 
-        // Trail
+        // 拖尾采样。衰减 0.045/帧 ≈ 22 帧寿命，配合 20 个采样上限，
+        // 让高速球拉出足够长的光带——球是玩家唯一需要持续追踪的物体，
+        // 拖尾越清晰，预判落点越容易。
         b.trail.push({ x: b.x, y: b.y, life: 1 });
         b.trail = b.trail.filter((t) => {
-            t.life -= 0.06;
+            t.life -= 0.045;
             return t.life > 0;
         });
-        if (b.trail.length > 14) b.trail.splice(0, b.trail.length - 14);
+        if (b.trail.length > 20) b.trail.splice(0, b.trail.length - 20);
 
         // 中毒计时：先走减伤时长，归零后转入免疫窗口
         if (b.poisonTimer > 0) {
@@ -316,6 +299,10 @@ export function updateBalls() {
         }
 
         // Bottom - lose ball
+        //
+        // 主球身份固定：不再由"落地后另选一颗球接任主球"的机制转移。
+        // 主球落地 = 直接扣血 + 回到挡板重新发球；副球落地只是消失。
+        // Boss 关不受影响，所有球落地都免费返回。
         if (b.y - b.radius > H + 20) {
             if (state.boss) {
                 // Boss 战：球落地不扣血，自动返回
@@ -327,6 +314,21 @@ export function updateBalls() {
                 resetBallToPaddle(b);
                 spawnFloatingText(W / 2, H / 2, "救生圈生效！", PAL.moss3);
                 playHeal();
+                continue;
+            }
+            if (b.isMain) {
+                // 主球落地：扣血。诅咒的额外坠落伤害在此叠加。
+                const dmg = 1 + (p.curseFallDamage || 0);
+                screenShake(9, 220);
+                playBallLost();
+                spawnFloatingText(W / 2, H / 2 + 40, "主球坠落！", PAL.blood3);
+                loseLife(dmg);
+                // 扣血可能直接触发 GAME_OVER，此时不要把球放回场上
+                if (state.gameState !== STATE.PLAYING) {
+                    balls.splice(i, 1);
+                    continue;
+                }
+                resetBallToPaddle(b);
                 continue;
             }
             balls.splice(i, 1);

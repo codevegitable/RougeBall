@@ -56,12 +56,14 @@ import {
     hitPauseCodexButton,
     hitPauseStatusButton,
     hitCodexTab,
+    hitStatusTab,
+    hitStatusBack,
     hitCodexNext,
     hitCodexPrev,
 } from "./ui.js";
 import { initAudio, toggleSound } from "./sound.js";
 import { spawnFloatingText } from "./fx.js";
-import { setCodexTab, setCodexPage } from "./ui.js";
+import { setCodexTab, setCodexPage, setStatusTab, setStatusPage } from "./ui.js";
 import { getUnlocks, setSkin, skinDef, getSelectedSkin } from "./unlocks.js";
 import { loadSettings, applySettings } from "./settings.js";
 import { GAME_CONFIG } from "./config.js";
@@ -172,6 +174,12 @@ window.addEventListener("keydown", (e) => {
         if (e.key === "ArrowLeft") { setCodexPage(-1); return; }
         if (e.key === "ArrowRight") { setCodexPage(1); return; }
     }
+    // 角色状态：← → 在当前分页内翻页，1~4 直接切分页
+    if (state.gameState === STATE.STATUS) {
+        if (e.key === "ArrowLeft") { setStatusPage(-1); return; }
+        if (e.key === "ArrowRight") { setStatusPage(1); return; }
+        if (e.key >= "1" && e.key <= "4") { setStatusTab(Number(e.key) - 1); return; }
+    }
     if (e.key === "m" || e.key === "M") {
         initAudio();
         const on = toggleSound();
@@ -227,6 +235,17 @@ canvas.addEventListener("click", (e) => {
             setCodexPage(1);
         } else if (hitCodexPrev(pos.x, pos.y)) {
             setCodexPage(-1);
+        }
+        return;
+    }
+
+    // 角色状态：切换分页同样不受防抖限制，否则连点两个 tab 会吞掉第二次
+    if (state.gameState === STATE.STATUS) {
+        const tabIdx = hitStatusTab(pos.x, pos.y);
+        if (tabIdx >= 0) {
+            setStatusTab(tabIdx);
+        } else if (hitStatusBack(pos.x, pos.y)) {
+            state.gameState = STATE.PAUSED;
         }
         return;
     }

@@ -1,7 +1,7 @@
 import { W, H, GRID_Y, BLOCK_GAP } from "./constants.js";
 import { mulberry32 } from "./utils.js";
 import { state } from "./state.js";
-import { BLOCK_SIZE_TABLE, HP_TABLE } from "./data/levels.js";
+import { BLOCK_SIZE_TABLE, HP_TABLE, ARMORED } from "./data/levels.js";
 
 // 方块尺寸随关卡递减（查表）
 function blockSizeFor(level) {
@@ -30,7 +30,7 @@ export function generateLevel(num) {
     target = Math.min(target, Math.floor(cols * maxRows * 0.75));
 
     // 血量档位（前 15 关固定 1HP，后续逐步提升）
-    const tier = num <= 15 ? 0 : Math.min(3, Math.floor((num - 16) / 5));
+    const tier = num <= 15 ? 0 : Math.min(HP_TABLE.length - 1, Math.floor((num - 16) / 5));
 
     // 前 3 关全部 1HP，不用概率表
     const force1HP = num <= 3;
@@ -71,7 +71,13 @@ export function createBlocksFromGrid(grid, num = 1) {
 
     const unbreakableChance = num > 10 ? Math.min(0.04 + (num - 10) * 0.004, 0.12) : 0;
     const movingChance = num >= 12 ? Math.min(0.05 + (num - 12) * 0.004, 0.18) : 0;
-    const shooterChance = num >= 18 ? Math.min(0.04 + (num - 18) * 0.003, 0.1) : 0;
+    // 重甲砖概率：接替原射击方块的位置，"武装"诅咒在此加成
+    const armoredChance = num >= ARMORED.minLevel
+        ? Math.min(
+            ARMORED.baseChance + (num - ARMORED.minLevel) * ARMORED.perLevel + (state.player.curseArmoredBonus || 0),
+            ARMORED.maxChance + (state.player.curseArmoredBonus || 0)
+        )
+        : 0;
 
     const bl = [];
     for (let row = 0; row < grid.length; row++) {
@@ -85,16 +91,18 @@ export function createBlocksFromGrid(grid, num = 1) {
             const moving = !indestructible && rng() < movingChance
                 ? { phase: rng() * Math.PI * 2, speed: 0.010 + rng() * 0.012, amp: 26 + rng() * 40 }
                 : null;
-            const shooter = !indestructible && !moving && rng() < shooterChance
-                ? { interval: 220 + rng() * 140, tick: 60 + rng() * 180 }
-                : null;
-            const hpBonus = state.player.curseBlockHpBonus || 0;
+            // 重甲砖：额外叠血量的硬点。不与移动方块叠加，避免"追着打又打不烂"
+            const armored = !indestructible && !moving && rng() < armoredChance;
+            const hpBonus = (state.player.curseBlockHpBonus || 0) + (armored ? ARMORED.hpBonus : 0);
+            const totalHp = type + hpBonus;
 
             bl.push({
                 x, y, baseX: x, baseY: y, w: bw, h: bh,
-                hp: indestructible ? Infinity : type + hpBonus,
-                maxHp: type,
-                indestructible, moving, shooter,
+                hp: indestructible ? Infinity : totalHp,
+                // maxHp 记录实际总血量，裂纹与配色档位才能反映重甲砖的真实硬度。
+                // 不可击碎方块保持有限值，避免 Infinity 流入配色/计分运算。
+                maxHp: totalHp,
+                indestructible, moving, armored,
             });
         }
     }

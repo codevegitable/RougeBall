@@ -178,7 +178,7 @@ export function recalcStats() {
     p.curseScoreMul = 1;
     p.curseRarePenalty = 0;
     p.curseBlockHpBonus = 0;
-    p.curseShooterBonus = 0;
+    p.curseArmoredBonus = 0;
     p.curseBulletSpeedMul = 1;
     p.curseCdMul = 1;
     p.curseShrinkPaddle = 0;
@@ -265,6 +265,7 @@ export function spawnExtraBalls(count) {
             blockHits: 0,
             poisonTimer: 0,
             poisonImmune: 0,
+            isMain: false,
         });
     }
 }

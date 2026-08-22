@@ -136,7 +136,13 @@ function pickNextAction(boss) {
     // 轮换技能，避免连续重复
     let available = boss.skills.filter(s => s !== boss._lastSkill);
     if (available.length === 0) available = [...boss.skills];
-    const skill = available[Math.floor(Math.random() * available.length)];
+    let skill;
+    // 诅咒司祭：祭坛技能权重提高（1.25 倍频率）
+    if (boss.bossType === "priest" && available.includes("altar") && Math.random() < 0.6) {
+        skill = "altar";
+    } else {
+        skill = available[Math.floor(Math.random() * available.length)];
+    }
     boss._lastSkill = skill;
     boss.action = { type: skill, phase: "warn", timer: 0 };
     boss.chargeProgress = 0;
@@ -410,46 +416,58 @@ function updateMinions(boss, dt) {
 // ─── 祭坛（诅咒司祭专属）──────────────────────────────────
 function executeAltar(boss, a, dt) {
     if (a.phase === "warn") {
-        if (a.timer > 20) {
+        // 预警 16 帧（1.25 倍频率）
+        if (a.timer > 16) {
             a.phase = "active";
             a.timer = 0;
         }
     } else if (a.phase === "active") {
         if (a.timer < 8) {
-            // 生成祭坛：同时最多 2 个
-            if (boss.altars.length < 2) {
-                const angle = Math.random() * Math.PI * 2;
-                const dist = 150 + Math.random() * 100;
-                const ax = Math.max(50, Math.min(W - 50, boss.x + Math.cos(angle) * dist));
-                const ay = Math.max(100, Math.min(H - 80, boss.y + Math.sin(angle) * dist));
-                // 诅咒类型随机
-                const kinds = ["dmg", "speed", "cd"];
-                const kind = kinds[Math.floor(Math.random() * kinds.length)];
-                boss.altars.push({
-                    x: ax, y: ay, r: 20, hp: 15 + boss.tier * 8,
-                    maxHp: 15 + boss.tier * 8, type: kind, flash: 0,
-                });
-                spawnFloatingText(ax, ay - 20, "诅咒祭坛出现！", PAL.vio2);
-                playBossShoot();
+            // 生成 1-5 个祭坛（普通三型共用一个上限）
+            const count = 1 + Math.floor(Math.random() * 5);
+            for (let n = 0; n < count; n++) {
+                if (boss.altars.filter(x => !x.chasing).length < 4) {
+                    spawnStaticAltar(boss);
+                }
+                // 30% 概率附带生成一个追踪祭坛（独立计数，上限 2）
+                if (Math.random() < 0.3 && boss.altars.filter(x => x.chasing).length < 2) {
+                    spawnChaseAltar(boss);
+                }
             }
-        }
-        if (a.timer < 12 + Math.random() * 8) {
-            // 多生成 1 个
-            if (boss.altars.length < 4 && Math.random() < 0.5) {
-                const angle = Math.random() * Math.PI * 2;
-                const dist = 150 + Math.random() * 100;
-                const ax = Math.max(50, Math.min(W - 50, boss.x + Math.cos(angle) * dist));
-                const ay = Math.max(100, Math.min(H - 80, boss.y + Math.sin(angle) * dist));
-                const kinds = ["dmg", "speed", "cd"];
-                const kind = kinds[Math.floor(Math.random() * kinds.length)];
-                boss.altars.push({ x: ax, y: ay, r: 20, hp: 15 + boss.tier * 8, maxHp: 15 + boss.tier * 8, type: kind, flash: 0 });
-                spawnFloatingText(ax, ay - 20, "诅咒祭坛出现！", PAL.vio2);
-            }
+            playBossShoot();
         }
         if (a.timer > 10) {
             startRecovery(boss, 30);
         }
     }
+}
+
+// 普通静态祭坛
+function spawnStaticAltar(boss) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 150 + Math.random() * 100;
+    const ax = Math.max(50, Math.min(W - 50, boss.x + Math.cos(angle) * dist));
+    const ay = Math.max(100, Math.min(H - 80, boss.y + Math.sin(angle) * dist));
+    const kinds = ["dmg", "speed", "cd"];
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    boss.altars.push({
+        x: ax, y: ay, r: 20, hp: 15 + boss.tier * 8,
+        maxHp: 15 + boss.tier * 8, type: kind, flash: 0, chasing: false,
+    });
+    spawnFloatingText(ax, ay - 20, "诅咒祭坛出现！", PAL.vio2);
+}
+
+// 追踪祭坛：半场生成，缓慢移向玩家
+function spawnChaseAltar(boss) {
+    const ax = W / 2 + (Math.random() - 0.5) * 240;
+    const ay = 100 + Math.random() * (H - 200);
+    const kinds = ["dmg", "speed", "cd"];
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    boss.altars.push({
+        x: ax, y: ay, r: 18, hp: 12 + boss.tier * 6,
+        maxHp: 12 + boss.tier * 6, type: kind, flash: 0, chasing: true,
+    });
+    spawnFloatingText(ax, ay - 20, "追踪祭坛！", PAL.ember2);
 }
 
 // 祭坛持续的诅咒效果（每帧应用）
@@ -461,6 +479,19 @@ function altarCurseEffects() {
         p.altarSpeedP = 1;
         p.altarCdP = 1;
         return;
+    }
+    // 追踪祭坛：缓慢移向挡板
+    const dt = state.dt;
+    for (const al of boss.altars) {
+        if (!al.chasing) continue;
+        const px = state.paddle.x + state.paddle.width / 2;
+        const py = state.paddle.y;
+        const dx = px - al.x;
+        const dy = py - al.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const spd = (0.7 + boss.tier * 0.1) * dt;
+        al.x += (dx / len) * spd;
+        al.y += (dy / len) * spd;
     }
     const hasDmg = boss.altars.some(x => x.type === "dmg");
     const hasSpeed = boss.altars.some(x => x.type === "speed");
@@ -799,25 +830,27 @@ export function drawBoss() {
         pBar(mx - m.r, my - m.r - PX * 3, m.r * 2, PX * 2, m.hp / m.maxHp, mc, { bg: PAL.ink0 });
     }
 
-    // 祭坛：石座 + 悬浮符文
+    // 祭坛：石座 + 悬浮符文（追踪祭坛用红色调标记）
     const ALTAR_ICONS = { dmg: "sword", speed: "lightning", cd: "hourglass" };
     for (const al of boss.altars) {
         const ax = al.x - boss.x;
         const ay = al.y - boss.y;
+        const ringCol = al.chasing ? PAL.ember2 : PAL.vio1;
+        const orbCol = al.chasing ? PAL.ember3 : PAL.vio3;
         pCircleAt(ax, ay, al.r, PAL.ink0);
-        pCircleAt(ax, ay, al.r - PX, PAL.vio1);
+        pCircleAt(ax, ay, al.r - PX, ringCol);
         // 旋转符文点：三个绕祭坛公转的像素点
         for (let i = 0; i < 3; i++) {
             const a = boss.t * 0.03 + (Math.PI * 2 * i) / 3;
-            pRectRaw(ax + Math.cos(a) * (al.r + PX) - PX / 2, ay + Math.sin(a) * (al.r + PX) - PX / 2, PX, PX, PAL.vio3);
+            pRectRaw(ax + Math.cos(a) * (al.r + PX) - PX / 2, ay + Math.sin(a) * (al.r + PX) - PX / 2, PX, PX, orbCol);
         }
-        drawIcon(ALTAR_ICONS[al.type] || "candle", ax, ay, 2, PAL.vio3);
+        drawIcon(ALTAR_ICONS[al.type] || "candle", ax, ay, 2, orbCol);
         if (al.flash > 0.02) {
             ctx.globalAlpha = Math.min(1, al.flash * 0.8);
             pCircleAt(ax, ay, al.r - PX, PAL.bone1);
             ctx.globalAlpha = 1;
         }
-        pBar(ax - al.r, ay - al.r - PX * 3, al.r * 2, PX * 2, al.hp / al.maxHp, PAL.vio2, { bg: PAL.ink0 });
+        pBar(ax - al.r, ay - al.r - PX * 3, al.r * 2, PX * 2, al.hp / al.maxHp, ringCol, { bg: PAL.ink0 });
     }
 
     // 尖刺环：像素方块沿圆周排布，替代描线尖刺

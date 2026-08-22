@@ -53,7 +53,7 @@ export const PAL = {
     vio2: "#a464c4",
     vio3: "#cfa0e4",
 
-    // 炭橙：2HP 方块、火焰、射手
+    // 炭橙：2HP 方块、火焰、敌弹
     ember0: "#7d3510",
     ember1: "#c2641d",
     ember2: "#ee933b",
@@ -67,12 +67,16 @@ export const PAL = {
     black: "#000000",
 };
 
-// 方块血量档位配色（1HP → 4HP），每档三色用于像素高光/主体/阴影
+// 方块血量档位配色（1HP → 6HP），每档三色用于像素高光/主体/阴影。
+// 第 5、6 档是重甲砖：冷秘蓝与暖金，饱和度明显高于前四档，
+// 让玩家一眼分辨"这块要多打几下"。
 export const BLOCK_TIERS = [
     { light: PAL.moss3, base: PAL.moss2, dark: PAL.moss1, shadow: PAL.moss0 },
     { light: PAL.ember3, base: PAL.ember2, dark: PAL.ember1, shadow: PAL.ember0 },
     { light: PAL.blood3, base: PAL.blood2, dark: PAL.blood1, shadow: PAL.blood0 },
     { light: PAL.vio3, base: PAL.vio2, dark: PAL.vio1, shadow: PAL.vio0 },
+    { light: PAL.arc3, base: PAL.arc2, dark: PAL.arc1, shadow: PAL.arc0 },
+    { light: PAL.gold3, base: PAL.gold2, dark: PAL.gold1, shadow: PAL.gold0 },
 ];
 
 // 稀有度配色

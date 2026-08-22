@@ -15,7 +15,7 @@ import {
 } from "./layout.js";
 import { drawIcon } from "./icons.js";
 import { REWARD_TYPE_NAME, REWARD_MAP, REWARDS } from "./rewards.js";
-import { CURSES, HEAVY_CURSES } from "./curses.js";
+import { CURSES, HEAVY_CURSES, CURSES_MAP } from "./curses.js";
 import { EVENTS } from "./events.js";
 import { loadSaveData } from "./game.js";
 import { getHighScore, skinDef, getUnlocks, isRewardUnlocked, getSelectedSkin, SKIN_START_SKILLS } from "./unlocks.js";
@@ -39,6 +39,12 @@ let penaltyCards = [], curseCards = [];
 let menuCodexBtn = null, pauseCodexBtn = null, menuSkinBtn = null, menuSettingsBtn = null, gameOverExitBtn = null;
 let codexTabBtns = [], codexNextBtn = null, codexPrevBtn = null;
 let settingsToggleBtns = [], settingsBackBtn = null;
+let statusTabBtns = [], statusBackBtn = null;
+// 角色状态当前分页：0=数值 1=技能 2=能力 3=诅咒
+let statusTab = 0;
+// 列表页内的翻页游标与总页数（由 drawStatusList 回填）
+let statusPage = 0;
+let statusPages = 1;
 
 function inRect(x, y, r) {
     return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -89,6 +95,22 @@ export function hitCodexTab(x, y) {
     return -1;
 }
 
+export function hitStatusTab(x, y) {
+    for (let i = 0; i < statusTabBtns.length; i++) if (inRect(x, y, statusTabBtns[i])) return i;
+    return -1;
+}
+export const hitStatusBack = (x, y) => inRect(x, y, statusBackBtn);
+// 切换分页时归零页码：不同分页条数不同，沿用旧页码会停在空页上
+export const setStatusTab = (i) => {
+    statusTab = Math.max(0, Math.min(3, i));
+    statusPage = 0;
+};
+export const getStatusTab = () => statusTab;
+export const setStatusPage = (d) => {
+    statusPage = Math.max(0, Math.min(statusPages - 1, statusPage + d));
+};
+export const getStatusPage = () => statusPage;
+
 // 当前帧记录的所有命中矩形，供视觉审计校验"画在哪里就能点到哪里"。
 // 只读快照，不参与游戏逻辑。
 export function debugHitRects() {
@@ -96,10 +118,12 @@ export function debugHitRects() {
         start: startBtn, continue: continueBtn, restart: restartBtn,
         menuCodex: menuCodexBtn, menuSkin: menuSkinBtn, menuSettings: menuSettingsBtn,
         pauseResume: pauseResumeBtn, pauseRestart: pauseRestartBtn, pauseQuit: pauseQuitBtn,
-        pauseCodex: pauseCodexBtn, gameOverExit: gameOverExitBtn, bossClear: bossClearBtn,
+        pauseCodex: pauseCodexBtn, pauseStatus: pauseStatusBtn,
+        gameOverExit: gameOverExitBtn, bossClear: bossClearBtn,
         skip: state._skipBtn, settingsBack: settingsBackBtn,
         eventContinue: eventContinueBtn, swapCancel: swapCancelBtn,
         codexTabs: codexTabBtns, codexNext: codexNextBtn, codexPrev: codexPrevBtn,
+        statusTabs: statusTabBtns, statusBack: statusBackBtn,
         rewardCards, curseCards, penaltyCards, eventButtons, swapCards,
     };
 }
@@ -140,6 +164,13 @@ function measureText(t, size) {
 // 最近一次绘制的弹窗几何，供视觉审计校验是否溢出画面
 let lastModal = null;
 export const debugLastModal = () => lastModal;
+
+// 角色状态页最后一次绘制的内容边界，供审计校验是否溢出面板。
+// 用几何而不是像素判断：画布底色就是 ink1，且 STATUS 画在 drawUI() 之后，
+// 底下的 HUD 与游戏区会透过网点遮罩显出来，
+// 所以"面板外是否出现某个颜色"永远为真，量不出溢出。
+let statusBounds = null;
+export const debugStatusBounds = () => statusBounds;
 
 // 弹窗外框：暗化背景 + 居中浮雕面板 + 标题条
 function pModal(w, h, title, opts = {}) {
@@ -463,17 +494,67 @@ export function drawPauseScreen() {
 }
 
 // ═══ 角色状态总览 ═════════════════════════════════════════
-export function drawStatusScreen() {
-    const p = state.player;
-    const modal = pModal(600, 520, "角色状态", { icon: "user", scrim: 0.88 });
-    const X0 = modal.x + PX * 2;
-    const X1 = X0 + 280;
-    let y = modal.y + PX * 6;
-    const L = 17;
+// ═══ 角色状态 ═══════════════════════════════════════════
+// 四个分页各看一类状态，而不是把四段挤在同一面板里。
+// 原实现把「数值 / 技能 / 能力 / 诅咒」四段顺序堆进 520px 高的面板，
+// 而能力最多 24 条、诅咒最多 36 条：中期配置就要溢出 122px，满配溢出 682px，
+// 文字直接叠在一起。分页后每页只需容纳自己那一类，且各页独立滚动上限。
+// 图标只用 icons.js 里确实存在的字形：不存在的名字会被 resolveIcon
+// 静默兜底成 star，四个 tab 就会有多个一样的图标。
+const STATUS_TABS = [
+    { label: "数值", icon: "scroll" },
+    { label: "技能", icon: "lightning" },
+    { label: "能力", icon: "star" },
+    { label: "诅咒", icon: "curse" },
+];
 
-    // ── 1. 当前数值 ──
-    pTextShadow("╴ 当前数值", X0, y, PAL.gold3, { size: 14, align: "left" });
-    y += L + 2;
+export function drawStatusScreen() {
+    const modal = pModal(620, 500, "角色状态", { icon: "heart", scrim: 0.88 });
+
+    // ── Tab 栏 ──
+    const tw = 128, th = 30, gap = 6;
+    const tsx = modal.x + (modal.w - (STATUS_TABS.length * (tw + gap) - gap)) / 2;
+    const ty = modal.bodyY + PX;
+    statusTabBtns = [];
+    for (let i = 0; i < STATUS_TABS.length; i++) {
+        const tx = snap(tsx + i * (tw + gap));
+        const active = i === statusTab;
+        const accent = i === 3 ? PAL.blood2 : PAL.gold1;
+        const accentHi = i === 3 ? PAL.blood3 : PAL.gold3;
+        pChamferFill(tx, ty, tw, th, PAL.ink0, 2);
+        pChamferFill(tx + PX, ty + PX, tw - PX * 2, th - PX * 2, active ? accent : PAL.stone0, 1);
+        if (active) pRect(tx + PX * 2, ty + PX, tw - PX * 4, PX, accentHi);
+        drawIcon(STATUS_TABS[i].icon, tx + 22, ty + th / 2, 2, active ? PAL.ink0 : PAL.mist1);
+        pText(STATUS_TABS[i].label, tx + tw / 2 + 12, ty + 20, active ? PAL.ink0 : PAL.mist1, {
+            size: 13, bold: true, align: "center", outline: null,
+        });
+        statusTabBtns.push({ x: tx, y: ty, w: tw, h: th });
+    }
+
+    // ── 内容区 ──
+    const bodyTop = ty + th + PX * 3;
+    const bodyBottom = modal.y + modal.h - PX * 13;   // 给底部返回按钮留位
+    const pad = PX * 5;
+    const X0 = modal.x + pad;
+    const X1 = modal.x + modal.w - pad;
+
+    statusBounds = { limit: bodyBottom, maxY: bodyTop, tab: statusTab };
+    if (statusTab === 0) drawStatusStats(X0, X1, bodyTop, bodyBottom);
+    else if (statusTab === 1) drawStatusSkills(X0, X1, bodyTop, bodyBottom);
+    else if (statusTab === 2) drawStatusPerks(X0, X1, bodyTop, bodyBottom);
+    else drawStatusCurses(X0, X1, bodyTop, bodyBottom);
+
+    // ── 返回按钮 ──
+    statusBackBtn = pButton(
+        snap(modal.x + (modal.w - BTN_SM_W) / 2), snap(modal.y + modal.h - PX * 11),
+        BTN_SM_W, BTN_SM_H, "返回 (ESC)", { accent: PAL.stone2 },
+    );
+}
+
+// ── 页1：数值 ──
+// 两列并排，把 11 行压成 6 行，避免竖向拉长；数值右对齐便于纵向比对。
+function drawStatusStats(X0, X1, top, bottom) {
+    const p = state.player;
     const stats = [
         ["生命", `${Math.floor(p.lives)}`],
         ["分数", `${Math.floor(p.score / 10)}`],
@@ -487,74 +568,152 @@ export function drawStatusScreen() {
         ["开局球数", `${p.startBalls}`],
         ["球体积", `${(p.ballRadiusMul * 100).toFixed(0)}%`],
     ];
-    for (const [k, v] of stats) {
-        pTextShadow(k, X0, y, PAL.mist1, { size: 12, align: "left" });
-        pTextShadow(v, X1, y, PAL.bone1, { size: 12, align: "right" });
-        y += 14;
+    // 两列布局：列宽均分，每列内部「名称左对齐 / 数值右对齐」
+    const colW = (X1 - X0 - PX * 6) / 2;
+    const rowH = 26;
+    const rows = Math.ceil(stats.length / 2);
+    for (let i = 0; i < stats.length; i++) {
+        const col = i < rows ? 0 : 1;
+        const row = i < rows ? i : i - rows;
+        const cx = X0 + col * (colW + PX * 6);
+        const cy = top + PX * 2 + row * rowH;
+        if (cy + rowH > bottom) break;
+        if (statusBounds) statusBounds.maxY = Math.max(statusBounds.maxY, cy + rowH - PX * 3);
+        // 交替行底色：长列表里帮助横向对位
+        if (row % 2 === 0) pRect(cx - PX, cy - PX * 3, colW + PX * 2, rowH - PX, PAL.ink1);
+        pTextShadow(stats[i][0], cx, cy, PAL.mist1, { size: 12, align: "left" });
+        pTextShadow(stats[i][1], cx + colW, cy, PAL.bone1, { size: 13, bold: true, align: "right" });
     }
-    y += 6;
+}
 
-    // ── 2. 当前技能 ──
-    pTextShadow("╴ 当前技能", X0, y, PAL.gold3, { size: 14, align: "left" });
-    y += L + 2;
+// ── 页2：技能 ──
+// 每条一行卡片：图标 + 名称 + 描述。描述单独一行，不再和名称抢同一行的左右两端。
+function drawStatusSkills(X0, X1, top, bottom) {
+    const p = state.player;
     const skills = p.skills || [];
     if (skills.length === 0) {
-        pTextShadow("（无装备技能）", X0, y, PAL.mist0, { size: 12, align: "left" });
-        y += 16;
-    } else {
-        for (const s of skills) {
-            const def = REWARD_MAP[s.id] || SKIN_START_SKILLS[s.id];
-            if (def) {
-                pTextShadow(`${def.icon} ${def.name}`, X0, y, PAL.bone1, { size: 12, align: "left" });
-                pTextShadow(def.desc, X1, y, PAL.mist1, { size: 11, align: "right" });
-                y += 14;
-            }
-        }
+        emptyHint("尚未装备技能", X0, X1, top);
+        return;
     }
-    y += 6;
+    let y = top + PX;
+    for (const s of skills) {
+        const def = REWARD_MAP[s.id] || SKIN_START_SKILLS[s.id];
+        if (!def) continue;
+        if (y + SROW_H > bottom) break;
+        const rp = RARITY_PAL[def.rarity] || RARITY_PAL.common;
+        drawStatusRow(X0, X1, y, def.icon, def.name, def.desc, rp.light, rp.base);
+        y += SROW_STEP;
+    }
+}
 
-    // ── 3. 当前能力 ──
-    pTextShadow("╴ 当前能力", X0, y, PAL.gold3, { size: 14, align: "left" });
-    y += L + 2;
-    const perks = p.perks || {};
-    const perkEntries = Object.entries(perks).filter(([id]) => {
+// 单行条目：左侧稀有度竖条 + 点阵图标 + 名称 + 描述
+// 图标必须走 drawIcon：数据文件里 icon 存的是 emoji（"⚡"/"❤️"），
+// 用 pTextShadow 直接打会在画布上渲染出抗锯齿的系统 emoji，
+// 与像素风不符且各平台不一致；drawIcon 会经 EMOJI_MAP 映射成点阵字形。
+//
+// 行高与基线是量出来的，不要随手改：pText 给每个字形描 1px 黑边，
+// 实际墨迹带比字号高 2px——名称(13号)占基线上方约 14px，描述(11号)占基线
+// 上方约 12px。原本行体 40px、基线差 18px，两行墨迹之间只剩 1px，
+// 这就是"文字挤在一起"的直接原因。
+//
+// 现在行体 44px、基线差 23px，行内留出 5~8px（随字形起伏），行间 8px。
+// 步距固定 52px：再大就从每列 6 行掉到 5 行（诅咒 36 条要多翻一页），
+// 而行内间距靠基线差解决，不必靠加高行体。
+const SROW_H = 44;          // 行体高度
+const SROW_STEP = 52;       // 行体 + 8px 行间空白
+function drawStatusRow(X0, X1, y, icon, name, desc, iconColor, barColor, nameColor = PAL.bone1) {
+    if (statusBounds) statusBounds.maxY = Math.max(statusBounds.maxY, y + SROW_H);
+    const w = X1 - X0;
+    pRect(X0, y, w, SROW_H, PAL.ink1);
+    pRect(X0, y, PX, SROW_H, barColor);
+    drawIcon(icon, X0 + PX * 7, y + SROW_H / 2, 2.5, iconColor, name);
+    pText(name, X0 + PX * 13, y + 16, nameColor, { size: 13, bold: true });
+    if (desc) {
+        const d = String(desc);
+        pTextShadow(d.length > 40 ? d.slice(0, 39) + "…" : d,
+            X0 + PX * 13, y + 41, PAL.mist1, { size: 11 });
+    }
+}
+
+function emptyHint(text, X0, X1, top) {
+    pTextShadow(text, (X0 + X1) / 2, top + 40, PAL.mist0, { size: 13, align: "center" });
+}
+
+// ── 页3：能力 ──
+// 能力型奖励共 24 种，单页放不下，超出部分显示计数提示而不是画到面板外。
+function drawStatusPerks(X0, X1, top, bottom) {
+    const p = state.player;
+    const entries = Object.entries(p.perks || {}).filter(([id]) => {
         const def = REWARD_MAP[id];
         return def && def.type === "ability";
     });
-    if (perkEntries.length === 0) {
-        pTextShadow("（无能力）", X0, y, PAL.mist0, { size: 12, align: "left" });
-        y += 16;
-    } else {
-        for (const [id, count] of perkEntries) {
-            const def = REWARD_MAP[id];
-            const label = count > 1 ? `${def.icon} ${def.name} ×${count}` : `${def.icon} ${def.name}`;
-            pTextShadow(label, X0, y, PAL.bone1, { size: 12, align: "left" });
-            pTextShadow(def.desc, X1, y, PAL.mist1, { size: 11, align: "right" });
-            y += 14;
-        }
+    if (entries.length === 0) {
+        emptyHint("尚未获得能力", X0, X1, top);
+        return;
     }
-    y += 6;
+    drawStatusList(X0, X1, top, bottom, entries.map(([id, count]) => {
+        const def = REWARD_MAP[id];
+        const rp = RARITY_PAL[def.rarity] || RARITY_PAL.common;
+        return {
+            icon: def.icon,
+            name: count > 1 ? `${def.name} ×${count}` : def.name,
+            desc: def.desc,
+            iconColor: rp.light, barColor: rp.base,
+        };
+    }));
+}
 
-    // ── 4. 当前诅咒 ──
-    pTextShadow("╴ 当前诅咒", X0, y, PAL.gold3, { size: 14, align: "left" });
-    y += L + 2;
-    const curses = p.curses || [];
+// ── 页4：诅咒 ──
+function drawStatusCurses(X0, X1, top, bottom) {
+    const curses = state.player.curses || [];
     if (curses.length === 0) {
-        pTextShadow("（无诅咒）", X0, y, PAL.mist0, { size: 12, align: "left" });
-        y += 16;
-    } else {
-        for (const c of curses) {
-            const def = CURSES_MAP[c.id];
-            if (def) {
-                const desc = typeof def.desc === "function" ? def.desc(c.count) : def.desc;
-                const label = c.count > 1 ? `${def.icon} ${def.name} ×${c.count}` : `${def.icon} ${def.name}`;
-                pTextShadow(label, X0, y, PAL.blood2, { size: 12, align: "left" });
-                pTextShadow(desc, X1, y, PAL.mist1, { size: 11, align: "right" });
-                y += 14;
-            }
-        }
+        emptyHint("尚未承受诅咒", X0, X1, top);
+        return;
+    }
+    drawStatusList(X0, X1, top, bottom, curses.map((c) => {
+        const def = CURSES_MAP[c.id];
+        if (!def) return null;
+        const desc = typeof def.desc === "function" ? def.desc(c.count) : def.desc;
+        return {
+            icon: def.icon,
+            name: c.count > 1 ? `${def.name} ×${c.count}` : def.name,
+            desc,
+            iconColor: PAL.blood3, barColor: PAL.blood1, nameColor: PAL.blood3,
+        };
+    }).filter(Boolean));
+}
+
+// 通用列表：两列排布 + 翻页。
+// 一屏放得下 14 条，但能力最多 24 条、诅咒最多 36 条。只显示"还有 N 项"
+// 等于让玩家看不到自己一半的构筑——状态页的意义就是看清构筑，所以分页，
+// 保证每一条都能翻到。
+function drawStatusList(X0, X1, top, bottom, items) {
+    const colW = (X1 - X0 - PX * 4) / 2;
+    const rowH = SROW_STEP;
+    const maxRows = Math.max(1, Math.floor((bottom - top - PX * 4) / rowH));
+    const perPage = maxRows * 2;
+    const pages = Math.max(1, Math.ceil(items.length / perPage));
+    // 页码夹到有效范围：切 tab 后条数变少时，原页码可能已越界
+    const page = Math.min(statusPage, pages - 1);
+    const shown = items.slice(page * perPage, page * perPage + perPage);
+
+    for (let i = 0; i < shown.length; i++) {
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const cx = X0 + col * (colW + PX * 4);
+        const cy = top + PX + row * rowH;
+        const it = shown[i];
+        drawStatusRow(cx, cx + colW, cy, it.icon, it.name, it.desc,
+            it.iconColor, it.barColor, it.nameColor || PAL.bone1);
+    }
+
+    statusPages = pages;
+    if (pages > 1) {
+        pTextShadow(`${page + 1} / ${pages}　共 ${items.length} 项　← → 翻页`,
+            (X0 + X1) / 2, bottom + PX * 2, PAL.mist0, { size: 11, align: "center" });
     }
 }
+
 
 // ═══ 诅咒三选一 ═════════════════════════════════════════
 export function drawCurseScreen() {
