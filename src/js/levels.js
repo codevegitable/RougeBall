@@ -1,4 +1,4 @@
-import { W, H, GRID_Y, BLOCK_GAP } from "./constants.js";
+import { W, H, GRID_Y, BLOCK_GAP, SPEED_ZONE_Y } from "./constants.js";
 import { mulberry32 } from "./utils.js";
 import { state } from "./state.js";
 import { BLOCK_SIZE_TABLE, HP_TABLE, HP_TIER, ARMORED, BLOCK_COUNT } from "./data/levels.js";
@@ -19,6 +19,9 @@ export function generateLevel(num) {
     const margin = 30;
     const cols = Math.floor((W - 2 * margin) / (bw + gap));
     const maxRows = Math.floor((H - GRID_Y - 150) / (bh + gap));
+    // 方块不能低于速度区间边界
+    const zoneRows = Math.floor((SPEED_ZONE_Y - GRID_Y - bh) / (bh + gap));
+    const limitedRows = Math.min(maxRows, Math.max(1, zoneRows));
     const rng = mulberry32(num * 1337 + 991);
 
     // 目标方块数：对数增长（见 data/levels.js 的 BLOCK_COUNT 说明）。
@@ -32,7 +35,7 @@ export function generateLevel(num) {
         const jitter = 1 - BLOCK_COUNT.variance / 2 + rng() * BLOCK_COUNT.variance;
         target = Math.round(grow * jitter);
     }
-    target = Math.min(target, Math.floor(cols * maxRows * BLOCK_COUNT.capRatio));
+    target = Math.min(target, Math.floor(cols * limitedRows * BLOCK_COUNT.capRatio));
 
     // 血量档位：从 HP_TIER.startLevel 起每 step 关升一档。
     // 原为"第 16 关起每 5 关一档"，前 15 关血量恒为 1，
@@ -68,7 +71,7 @@ export function generateLevel(num) {
         ? 0.6
         : Math.min(BLOCK_COUNT.fillBase + (num - 1) * BLOCK_COUNT.fillPerLevel, BLOCK_COUNT.fillCap)
           + (state.player.curseDensityBonus || 0);
-    for (let r = 0; r < maxRows && placed < target; r++) {
+    for (let r = 0; r < limitedRows && placed < target; r++) {
         const row = [];
         const gapCols = new Set();
         while (gapCols.size < gapCount) {

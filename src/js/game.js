@@ -10,6 +10,8 @@ import {
     GRID_COLS,
     PADDLE_BASE_W,
     PADDLE_H,
+    SPEED_ZONE_Y,
+    LAUNCH_SPEED_MUL,
 } from "./constants.js";
 import { GAME_CONFIG } from "./config.js";
 import { state, addScore, loseLife } from "./state.js";
@@ -593,6 +595,8 @@ export function launchBalls() {
         if (!b.launched) {
             launchedAny = true;
             b.launched = true;
+            // 发球时速度 ×4（区间外高速）
+            b.speed = BALL_BASE_SPEED * state.player.ballSpeedMul * LAUNCH_SPEED_MUL;
             const angle = ((Math.random() * 20 - 10 - 90) * Math.PI) / 180;
             b.vx = Math.cos(angle) * b.speed;
             b.vy = Math.sin(angle) * b.speed;

@@ -1,4 +1,4 @@
-import { W, H, COLORS, MAX_BALLS, BALL_BASE_SPEED, PADDLE_BASE_W, BALL_BLOCK_ACCEL, BALL_SPEED_CAP, STATE } from "./constants.js";
+import { W, H, COLORS, MAX_BALLS, BALL_BASE_SPEED, PADDLE_BASE_W, BALL_BLOCK_ACCEL, BALL_SPEED_CAP, STATE, SPEED_ZONE_Y, LAUNCH_SPEED_MUL } from "./constants.js";
 import { state, addScore, loseLife } from "./state.js";
 import { spawnParticles } from "./particles.js";
 import { screenShake, hitStop, flashPaddle, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
@@ -318,6 +318,23 @@ export function updateBalls() {
         // 精准打击：追踪空中累积帧数
         if (b.launched) b.airFrames = (b.airFrames || 0) + 1;
 
+        // 速度区间：区间外（y < SPEED_ZONE_Y）速度 ×4，区间内恢复正常
+        const baseSpeed = BALL_BASE_SPEED * p.ballSpeedMul;
+        if (b.launched && b.y < SPEED_ZONE_Y) {
+            const targetSpeed = baseSpeed * LAUNCH_SPEED_MUL;
+            if (b.speed < targetSpeed) {
+                const ratio = targetSpeed / b.speed;
+                b.speed = targetSpeed;
+                b.vx *= ratio;
+                b.vy *= ratio;
+            }
+        } else if (b.launched && b.y >= SPEED_ZONE_Y && b.speed > baseSpeed * 1.5) {
+            const ratio = baseSpeed / b.speed;
+            b.speed = baseSpeed;
+            b.vx *= ratio;
+            b.vy *= ratio;
+        }
+
         // 毒雾：球进入毒区则中毒减伤。放在移动之后判定，避免用上一帧的位置。
         applyPoisonZones(b);
 
@@ -393,7 +410,7 @@ export function updateBalls() {
             const hitPos = (b.x - paddle.x) / paddle.width;
             const clampedPos = Math.max(0.05, Math.min(0.95, hitPos));
             const angle = (1 - clampedPos) * Math.PI * 0.7 + Math.PI * 0.15;
-            // 接球时重置速度为基准（抹掉累计加速）
+            // 接球时重置速度为基准（抹掉累计加速），挡板在区间内速度正常
             b.speed = BALL_BASE_SPEED * p.ballSpeedMul;
             b.vx = Math.cos(angle) * b.speed;
             b.vy = -Math.abs(Math.sin(angle) * b.speed);
