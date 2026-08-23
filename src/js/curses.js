@@ -35,7 +35,7 @@ const CURSE_EFFECTS = {
     time_warp(n, p) { p.curseCdMul *= 1.3; },
     shadow_clone(n, p) { p.curseHitPenalty += 0.3; },
     void_rift(n, p) { p.curseFallDamage += 0.5; },
-    fate_seal(n, p) { /* 逻辑在 setupCurseSelect 中处理：强制只有 1 项可选 */ },
+    fate_seal(n, p) { p.curseChoicePenalty = Math.min(2, (p.curseChoicePenalty || 0) + 2); },
     // 重诅咒
     blood_oath(n, p) { p.curseFallDamage += 1; },
     seal(n, p) { p.curseSkillSlotPenalty = 1; },

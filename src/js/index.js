@@ -66,6 +66,7 @@ import { spawnFloatingText } from "./fx.js";
 import { setCodexTab, setCodexPage, setStatusTab, setStatusPage } from "./ui.js";
 import { getUnlocks, setSkin, skinDef, getSelectedSkin } from "./unlocks.js";
 import { loadSettings, applySettings } from "./settings.js";
+import { dismissGuide, guideReadyToDismiss } from "./tutorial.js";
 import { GAME_CONFIG } from "./config.js";
 import { REWARDS, recalcStats } from "./rewards.js";
 import { CURSES_MAP } from "./curses.js";
@@ -149,6 +150,14 @@ resize();
 window.addEventListener("keydown", (e) => {
     // 魂斗罗秘籍检测
     checkKonami(e);
+    // 引导展示期间：仅响应关闭引导的按键，其余全部拦截
+    if (state.guide) {
+        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            if (guideReadyToDismiss()) dismissGuide();
+        }
+        return;
+    }
     // 开发者模式输入检测（不拦截游戏按键）
     if (e.key === "Enter" && devInputBuffer.length > 0) {
         e.preventDefault();
@@ -226,6 +235,12 @@ canvas.addEventListener(
         const pos = getCanvasPos(e.touches[0]);
         state.mouseX = pos.x;
 
+        // 引导期间：关闭引导，不透传
+        if (state.guide) {
+            if (guideReadyToDismiss()) dismissGuide();
+            return;
+        }
+
         // Also launch ball if playing
         if (state.gameState === STATE.PLAYING) {
             launchBalls();
@@ -247,6 +262,12 @@ canvas.addEventListener(
 canvas.addEventListener("click", (e) => {
     initAudio();
     const pos = getCanvasPos(e);
+
+    // 引导期间：点击关闭引导，不透传给下层界面
+    if (state.guide) {
+        if (guideReadyToDismiss()) dismissGuide();
+        return;
+    }
 
     // 图鉴交互不受防抖限制
     if (state.gameState === STATE.CODEX) {

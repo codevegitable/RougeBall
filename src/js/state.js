@@ -39,6 +39,8 @@ export const state = {
     curseStrength: 0, // 诅咒强度
     pendingBossCurse: false, // 待选择 Boss 诅咒
     uiLockUntil: 0, // 点击防抖时间戳
+    guide: null, // 当前展示的新手引导 {id, shownAt}
+    guideQueue: [], // 待展示的引导 id 队列（多条同时触发时逐条展示）
     time: 0, // 全局帧计数
     dt: 1, // 本帧相对 60fps 的时间倍率（帧率无关物理）
     lastTs: 0,

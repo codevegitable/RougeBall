@@ -72,7 +72,7 @@ export const REWARD_DATA = [
     // ═══ 解锁奖励 ═══
     { id: "guardian_core", name: "守护核心", icon: "🛡️", rarity: "uncommon", type: "ability", maxStacks: 1, tierLock: 0, desc: "每关开始获得 2 秒能量护盾" },
     { id: "greed_eye", name: "贪婪之眼", icon: "👁️", rarity: "uncommon", type: "ability", maxStacks: 2, tierLock: 0, desc: "击碎方块额外获得 +50% 分数" },
-    { id: "vampiric_gem", name: "吸血宝石", icon: "💎", rarity: "rare", type: "ability", maxStacks: 1, tierLock: 1, desc: "击碎方块时 3% 概率恢复 1 生命" },
+    { id: "vampiric_gem", name: "吸血宝石", icon: "💎", rarity: "rare", type: "ability", maxStacks: 1, tierLock: 1, bossOnly: true, desc: "击碎方块时 3% 概率恢复 1 生命" },
     { id: "rapid_cooling", name: "极速制冷", icon: "❄️", rarity: "uncommon", type: "bonus", maxStacks: 3, tierLock: 1, desc: "技能冷却额外 -15%" },
     { id: "titan_ball", name: "泰坦之球", icon: "🌍", rarity: "rare", type: "ability", maxStacks: 1, tierLock: 2, desc: "球体积 +60%，撞击方块伤害 +30%" },
     { id: "blessed_start", name: "祝福开局", icon: "✨", rarity: "rare", type: "bonus", maxStacks: 1, tierLock: 2, desc: "每关开始额外获得 2 个球" },

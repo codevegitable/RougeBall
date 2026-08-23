@@ -25,6 +25,7 @@ import {
     drawGameOver,
     drawVictory,
 } from "./ui.js";
+import { drawGuideOverlay } from "./tutorial.js";
 
 // ─── 挡板：石质符文平台 ───────────────────────────────────
 //
@@ -386,6 +387,7 @@ export function render() {
         drawMenu();
         drawEffects();
         ctx.restore();
+        drawGuideOverlay();
         return;
     }
 
@@ -427,6 +429,7 @@ export function render() {
 
     ctx.restore();
 
+    drawGuideOverlay();
     drawHurtOverlay();
 }
 

@@ -37,7 +37,7 @@ export const BOSS_CURSE_DATA = [
     { id: "time_warp", name: "时间扭曲", icon: "⏰", tier: "boss", desc: () => "技能冷却 +30%" },
     { id: "shadow_clone", name: "暗影分身", icon: "👥", tier: "boss", desc: () => "受击面积 +30%" },
     { id: "void_rift", name: "虚空裂隙", icon: "🕳️", tier: "boss", desc: () => "球落地额外扣 0.5 命" },
-    { id: "fate_seal", name: "命运封印", icon: "🔮", tier: "boss", forced: true, desc: () => "诅咒选择时仅 1 项可选，且无法跳过" },
+    { id: "fate_seal", name: "命运封印", icon: "🔮", tier: "boss", desc: () => "诅咒选择时仅 1 项可选，且无法跳过" },
 ];
 
 export const HEAVY_CURSE_DATA = [

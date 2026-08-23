@@ -1184,10 +1184,14 @@ function updateBossBullets() {
             let diff = want - cur;
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
-            const na = cur + Math.max(-0.028 * dt, Math.min(0.028 * dt, diff));
+            const na = cur + Math.max(-0.016 * dt, Math.min(0.016 * dt, diff));
             const spd = Math.hypot(b.vx, b.vy);
+            // 保留最小纵向分量，防止子弹完全水平追踪无法消失
+            const vySign = Math.sign(b.vy) || 1;
+            const minVy = Math.min(spd * 0.18, Math.abs(b.vy) || 1);
             b.vx = Math.cos(na) * spd;
             b.vy = Math.sin(na) * spd;
+            if (Math.abs(b.vy) < minVy) b.vy = vySign * minVy;
         }
 
         if (b.splitAt && b.age >= b.splitAt) {

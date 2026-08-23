@@ -37,6 +37,7 @@ import { RARITY } from "./constants.js";
 import { rollCursePool, applyCurseStack, BOSS_CURSES } from "./curses.js";
 import { getSelectedSkin, skinDef } from "./unlocks.js";
 import { PAL } from "./palette.js";
+import { queueGuideOnce, checkPendingGuides, clearGuides } from "./tutorial.js";
 
 // ─── 存档 ─────────────────────────────────────────────────
 const SAVE_KEY = "bounceRoguelikeSave";
@@ -167,11 +168,13 @@ export function loadLevel(num, skipCurse = false) {
         spawnExtraBalls(state.player.startBalls - 1);
     }
     saveProgress();
+    checkPendingGuides(); // 按场上要素补引导（基本操作/技能/方块机制）
 }
 
 // ─── 流程：开局 ───────────────────────────────────────────
 export function startGameRun() {
     clearProgressSave();
+    clearGuides(); // 清掉可能的残留引导，避免盖住开局选卡
     resetPlayer();
     // 给予皮肤开场技能（从 REWARD_MAP 中查找）
     const skinIdx = getSelectedSkin();
@@ -188,6 +191,7 @@ export function startGameRun() {
     state.rareOnly = false;
     state.levelChoices = getRewardChoices(3 + state.player.extraChoices);
     state.player.rewardBoost = null;
+    queueGuideOnce("startReward"); // 首次开局解释选卡规则
 }
 
 export function handleStartRewardPick(def) {
@@ -217,6 +221,7 @@ export function continueFromSave() {
         state.pendingChallenge = false;
         state.gameState = STATE.EVENT;
         playEventOpen();
+        queueGuideOnce("event"); // 首次进入事件房时解释规则
         return;
     }
     if (isBossLevel(p.level)) {
@@ -316,6 +321,7 @@ function finalizeRewardStage() {
         state.gameState = STATE.EVENT;
         playEventOpen();
         spawnFloatingText(400, 260, `事件：${state.currentEvent.name}`, PAL.gold3);
+        queueGuideOnce("event"); // 首次进入事件房时解释规则
         return;
     }
     loadLevel(next);
@@ -325,17 +331,11 @@ function finalizeRewardStage() {
 // Boss 诅咒三选一
 function setupBossCurseSelect() {
     const bossCurses = [...BOSS_CURSES].sort(() => Math.random() - 0.5);
-    // 检查是否有强制诅咒（命运封印）— 如果有则只显示 1 项
-    const forcedIdx = bossCurses.findIndex(c => c.forced);
-    if (forcedIdx >= 0) {
-        const forced = bossCurses.splice(forcedIdx, 1)[0];
-        state.curseChoices = [forced];
-    } else {
-        const penalty = state.player.curseChoicePenalty || 0;
-        state.curseChoices = bossCurses.slice(0, Math.max(1, 3 - penalty));
-    }
+    const penalty = state.player.curseChoicePenalty || 0;
+    state.curseChoices = bossCurses.slice(0, Math.max(1, 3 - penalty));
     state.curseStrength = 1;
     state.gameState = STATE.CURSE_SELECT;
+    queueGuideOnce("curse"); // 首次承受诅咒时解释规则
     spawnFloatingText(400, 200, state.curseChoices.length === 1 ? "命运封印！强制诅咒" : "选择一项 Boss 诅咒", PAL.blood3);
 }
 
@@ -345,18 +345,12 @@ function setupCurseSelect() {
     // 排除攻击力已为 1 时的锈蚀诅咒
     const filtered = pool.filter(c => !(c.id === "rust" && state.player.ballDamage <= 1));
     let shuffled = [...filtered].sort(() => Math.random() - 0.5);
-    // 检查是否有强制诅咒（命运封印）— 如果有则只显示 1 项
-    const forcedIdx = shuffled.findIndex(c => c.forced);
-    if (forcedIdx >= 0) {
-        const forced = shuffled.splice(forcedIdx, 1)[0];
-        state.curseChoices = [forced];
-    } else {
-        // 诅咒「诅咒回响」减少可选项（最少 1 项）
-        const penalty = state.player.curseChoicePenalty || 0;
-        state.curseChoices = shuffled.slice(0, Math.max(1, 3 - penalty));
-    }
+    // 诅咒「诅咒回响」&「命运封印」减少可选项（最少 1 项）
+    const penalty = state.player.curseChoicePenalty || 0;
+    state.curseChoices = shuffled.slice(0, Math.max(1, 3 - penalty));
     state.curseStrength = 1 + Math.floor((lv - 1) * 0.1);
     state.gameState = STATE.CURSE_SELECT;
+    queueGuideOnce("curse"); // 首次承受诅咒时解释规则
     spawnFloatingText(400, 200, state.curseChoices.length === 1 ? "命运封印！强制诅咒" : "选择一个诅咒", PAL.blood3);
 }
 
@@ -385,6 +379,7 @@ export function confirmCursePick(index) {
         state.gameState = STATE.EVENT;
         playEventOpen();
         spawnFloatingText(400, 260, `事件：${state.currentEvent.name}`, PAL.gold3);
+        queueGuideOnce("event"); // 首次事件房时解释规则
         return true;
     }
     loadLevel(next);
@@ -426,6 +421,7 @@ export function startBossFight() {
     playEventOpen();
     spawnFloatingText(400, 200, "BOSS 来袭", PAL.blood3);
     saveProgress();
+    checkPendingGuides(); // 首次 Boss 战 / 首次技能 / 首次基本操作等多条同步触发
 }
 
 // ─── 流程：事件房 ─────────────────────────────────────────
@@ -443,6 +439,7 @@ export function finishEvent() {
 export function quitEventToMenu() {
     saveProgress({ atEvent: state.currentEvent ? state.currentEvent.id : null });
     clearEvent();
+    clearGuides();
     state.gameState = STATE.MENU;
 }
 
@@ -472,6 +469,7 @@ export function beginChallengeRun() {
     }
     state.gameState = STATE.PLAYING;
     spawnFloatingText(400, 300, "限时挑战开始！", PAL.ember2);
+    queueGuideOnce("challenge"); // 首次限时挑战时解释规则
 }
 
 function buildChallengeGrid(level) {
@@ -533,11 +531,13 @@ export function pauseRestart() {
 
 export function pauseQuitToMenu() {
     saveProgress();
+    clearGuides();
     state.gameState = STATE.MENU;
 }
 
 export function quitToMenu() {
     clearProgressSave();
+    clearGuides();
     state.gameState = STATE.MENU;
 }
 
@@ -562,6 +562,8 @@ export function tryUseSkill(index) {
 
 // ─── 主循环逻辑更新 ───────────────────────────────────────
 export function update(ts = 0) {
+    // 引导期间暂停一切物理与流程
+    if (state.guide) return;
     if (state.gameState !== STATE.PLAYING) return;
     // 帧率无关 dt
     if (state.lastTs === 0) state.lastTs = ts;

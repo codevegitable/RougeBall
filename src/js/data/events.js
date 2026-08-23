@@ -76,10 +76,10 @@ export const EVENT_DATA = [
         id: "void",
         name: "虚空裂缝",
         icon: "🕳️",
-        desc: "裂缝中传来未知的低语：\n60% 概率获得随机奖励，40% 概率失去 15 分。",
+        desc: "裂缝中传来未知的低语：\n60% 概率获得随机奖励，40% 概率失去 2 点生命。",
         skippable: true,
         choices: [
-            { label: "伸手一探", action: { kind: "voidGamble", scoreCost: 150 } },
+            { label: "伸手一探", action: { kind: "sacrifice", costLives: 2 } },
             { label: "离开", action: { kind: "leave" } },
         ],
     },
@@ -111,7 +111,7 @@ export const EVENT_DATA = [
         desc: "温暖的火光让人安心。\n获得 100 分。",
         skippable: false,
         choices: [
-            { label: "休息片刻", action: { kind: "score", amount: 1000 } },
+            { label: "休息片刻", action: { kind: "score", amount: 100 } },
         ],
     },
     {
