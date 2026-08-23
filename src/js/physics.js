@@ -419,8 +419,13 @@ export function updateBalls() {
                 b.y = minion.y + ny * (rr + 1);
                 const dot = b.vx * nx + b.vy * ny;
                 if (dot < 0) {
-                    b.vx -= 2 * dot * nx;
-                    b.vy -= 2 * dot * ny;
+                    // 穿透对召唤物同样生效：不反弹，直接穿过
+                    if (b.piercingLeft > 0) {
+                        b.piercingLeft--;
+                    } else {
+                        b.vx -= 2 * dot * nx;
+                        b.vy -= 2 * dot * ny;
+                    }
                 }
                 minion.hp -= ballDamageOf(b);
                 minion.flash = 1;
