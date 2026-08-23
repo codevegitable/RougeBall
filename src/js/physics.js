@@ -672,4 +672,5 @@ function resetBallToPaddle(b) {
     // 球回到挡板等于重新出发，中毒与免疫一并清掉
     b.poisonTimer = 0;
     b.poisonImmune = 0;
+    b.airFrames = 0;
 }

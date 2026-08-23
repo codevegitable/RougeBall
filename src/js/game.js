@@ -177,12 +177,13 @@ export function loadLevel(num, skipCurse = false) {
     state.bossDangerZones = [];
     state.challenge = null;
     recalcStats(); // 每关刷新救生圈等按关重置的属性
-    // 重置初始奖励的每关计数
+    // 重置每关计数
     if (state.player) {
         state.player.surgeCounter = 0;
         state.player.surgeBonus = 0;
         state.player._shieldGranted = 0; // 守卫核心：每关重置
     }
+    state.breakCounter = 0; // 分裂计数每关重置
     resetPaddle();
     resetBall();
     if (state.player.startBalls > 1) {
@@ -459,6 +460,7 @@ export function startBossFight() {
     state.gameState = STATE.PLAYING;
     if (state.player.entryBonus > 0) addScore(state.player.entryBonus);
     state.player._shieldGranted = 0; // 守卫核心：Boss 战重置
+    state.breakCounter = 0; // 分裂计数 Boss 战重置
     playEventOpen();
     spawnFloatingText(400, 200, "BOSS 来袭", PAL.blood3);
     saveProgress();
@@ -504,6 +506,7 @@ export function beginChallengeRun() {
     state.bossBullets = [];
     state.enemyBullets = [];
     state.bossDangerZones = [];
+    state.breakCounter = 0;
     resetPaddle();
     resetBall();
     if (state.player.startBalls > 1) {

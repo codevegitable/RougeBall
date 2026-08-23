@@ -30,7 +30,7 @@ export const REWARD_DATA = [
     { id: "blast_charge", name: "爆裂蓄力", icon: "💥", rarity: "uncommon", type: "skill", cooldown: 25, desc: "接下来 5 秒内击碎方块时引发爆炸，波及周围方块" },
     // 🎇/🔆 都兜底到 star 字形，两个技能会长得一样。这里直接写字形名而非 emoji：
     // resolveIcon 对已知字形名原样返回，比挑一个"刚好映射对"的 emoji 更直白。
-    { id: "barrage", name: "弹幕爆发", icon: "ball", rarity: "uncommon", type: "skill", cooldown: 35, desc: "立即额外发射 5 个球" },
+    { id: "barrage", name: "弹幕爆发", icon: "ball", rarity: "rare", type: "skill", cooldown: 35, desc: "立即额外发射 5 个球" },
     { id: "power_strike", name: "突破极限", icon: "charge", rarity: "rare", type: "skill", cooldown: 30, desc: "接下来 5 秒内球伤害 ×2" },
     { id: "time_freeze", name: "时间冻结", icon: "🧊", rarity: "rare", type: "skill", cooldown: 40, desc: "4 秒内所有方块与 Boss 停止移动和攻击" },
     // ═══ 解锁技能 ═══
