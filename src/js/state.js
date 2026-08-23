@@ -41,10 +41,12 @@ export const state = {
     uiLockUntil: 0, // 点击防抖时间戳
     guide: null, // 当前展示的新手引导 {id, shownAt}
     guideQueue: [], // 待展示的引导 id 队列（多条同时触发时逐条展示）
+    breakCounter: 0, // 击碎方块全局计数，每 10 个生成一个新球
     time: 0, // 全局帧计数
     dt: 1, // 本帧相对 60fps 的时间倍率（帧率无关物理）
     lastTs: 0,
     codexFrom: null, // 图鉴入口记录（"menu" / "pause"）
+    codexItem: null, // 图鉴中被选中查看详情的条目（敌人数据等）
 };
 
 // ─── 记分（含分数倍率 + 解锁进度） ───────────────────────
@@ -68,6 +70,13 @@ export function loseLife(n = 1) {
     const p = state.player;
     if (!p) return;
     if (state.gameState !== STATE.PLAYING && state.gameState !== STATE.EVENT) return;
+    // 不屈：受到致命伤害时保留 1 条命，每局触发一次
+    if (p.lives <= n && p.perks?.init_tenacity > 0 && !p.tenacityUsed) {
+        p.tenacityUsed = 1;
+        p.lives = 1;
+        state.floatingTexts.push({ x: 400, y: 260, text: "不屈！保留 1 条命", color: PAL.moss3, life: 1.5, vy: -0.5 });
+        return;
+    }
     p.lives = Math.max(0, p.lives - n);
     if (p.lives <= 0) {
         state.gameState = STATE.GAME_OVER;

@@ -4,7 +4,7 @@ import { spawnFloatingText } from "./fx.js";
 import { playSkillUse } from "./sound.js";
 import { isRewardUnlocked } from "./unlocks.js";
 import { CURSES_MAP } from "./curses.js";
-import { REWARD_DATA, REWARD_TYPE_NAME } from "./data/rewards.js";
+import { REWARD_DATA, INITIAL_REWARD_DATA, REWARD_TYPE_NAME } from "./data/rewards.js";
 import { PAL } from "./palette.js";
 
 // ─── 数据与行为绑定 ───────────────────────────────────────
@@ -15,6 +15,8 @@ const APPLY_EFFECTS = {
     score500() { addScore(500); },
     score2000() { addScore(2000); },
     crown() { state.player.lives += 3 * (state.player.healMul || 1); addScore(500); },
+    // 初始奖励效果
+    initLives() { state.player.lives += 2; },
 };
 
 // 主动技能的释放效果（按技能 id）
@@ -41,6 +43,12 @@ export const REWARDS = REWARD_DATA.map((r) => ({
     ...r,
     apply: r.applyId ? (APPLY_EFFECTS[r.applyId] || null) : undefined,
     use: r.type === "skill" ? (USE_EFFECTS[r.id] || null) : undefined,
+}));
+
+// 初始奖励（独立于主池）
+export const INITIAL_REWARDS = INITIAL_REWARD_DATA.map((r) => ({
+    ...r,
+    apply: r.applyId ? (APPLY_EFFECTS[r.applyId] || null) : undefined,
 }));
 
 export const REWARD_MAP = Object.fromEntries(REWARDS.map((r) => [r.id, r]));
@@ -108,15 +116,37 @@ export function getRewardChoices(count, rareOnly = false) {
     const level = p.level || 1;
     const penalty = p.curseLuckPenalty || 0;
     count = Math.max(1, count - penalty);
+    const rarities = [RARITY.COMMON, RARITY.UNCOMMON, RARITY.RARE];
     for (let i = 0; i < count; i++) {
-        const rarity = rareOnly ? RARITY.RARE : rollRarity(level);
-        let pick = pickOfRarity(rarity, used);
-        if (!pick) pick = pickOfRarity(rareOnly ? RARITY.RARE : rollRarity(level), used);
+        let pick = null;
+        const r1 = rareOnly ? RARITY.RARE : rollRarity(level);
+        pick = pickOfRarity(r1, used);
+        if (!pick) {
+            const r2 = rareOnly ? RARITY.RARE : rollRarity(level);
+            pick = pickOfRarity(r2, used);
+        }
+        // 前两次都失败时，遍历所有稀有度兜底
+        if (!pick) {
+            for (const r of rarities) {
+                pick = pickOfRarity(r, used);
+                if (pick) break;
+            }
+        }
         if (!pick) continue;
         used.add(pick.id);
         result.push(pick);
     }
     return result;
+}
+
+// 初始奖励选卡：从独立池中随机抽取，不与其他奖励池共享
+export function getInitialRewardChoices(count) {
+    const pool = INITIAL_REWARDS.filter((r) => {
+        if (r.type === "skill") return false;
+        return (r.maxStacks ?? 1) > (state.player.perks[r.id] || 0);
+    });
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
 }
 
 // ─── 应用奖励 / 属性重算 ──────────────────────────────────
@@ -226,8 +256,16 @@ export function recalcStats() {
         while (p.skills.length > 1) p.skills.pop();
     }
 
-    // 守卫核心：每关护盾
-    if (n("guardian_core") > 0) p.shieldTimer = 120;
+    // 初始奖励（开局独立池）效果
+    const init = (id) => p.perks[id] || 0;
+    p.weakpointDmg = 1 * init("init_weakpoint");
+    p.shatterChance = 0.30 * init("init_shatter");
+    p.deflectRadius = 40 * init("init_deflect");
+    p.precisionDmg = 0.5 * init("init_precision");
+    p.precisionMax = 3 * init("init_precision");
+    // 能量涌动：surgeCounter 和 surgeBonus 在 loadLevel 中重置，surgeNeed 固定为 5
+    // 再生：regenCounter 在 clearLevel 中递增
+    // 不屈：tenacityUsed 在触发时标记，不在这里重置
 }
 
 // ─── 主动技能 ─────────────────────────────────────────────

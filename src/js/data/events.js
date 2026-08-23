@@ -111,7 +111,7 @@ export const EVENT_DATA = [
         desc: "温暖的火光让人安心。\n获得 100 分。",
         skippable: false,
         choices: [
-            { label: "休息片刻", action: { kind: "score", amount: 100 } },
+            { label: "休息片刻", action: { kind: "score", amount: 1000 } },
         ],
     },
     {
@@ -161,7 +161,7 @@ export const EVENT_DATA = [
         id: "sealed_room",
         name: "封印之间",
         icon: "🔐",
-        desc: "密室中封存着危险的力量：\n获得一个稀有奖励，但也会得到一个随机重诅咒。\n（重诅咒不会随关卡推进解除）",
+        desc: "密室中封存着危险的力量：\n获得一个稀有奖励，但也会得到一个随机重诅咒。",
         skippable: true,
         choices: [
             { label: "打开封印", action: { kind: "sealedRoom" } },

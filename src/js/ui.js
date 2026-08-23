@@ -2,7 +2,7 @@
 // 全部界面改为像素风：浮雕面板 + 切角边框 + 点阵图标 + 硬描边文字。
 // HUD 拆到 ui_hud.js；本文件负责菜单与各类弹窗，以及所有按钮命中检测。
 
-import { W, H, RARITY_META, MAX_SKILLS, TOTAL_LEVELS } from "./constants.js";
+import { W, H, STATE, RARITY_META, MAX_SKILLS, TOTAL_LEVELS } from "./constants.js";
 import { state } from "./state.js";
 import { ctx } from "./canvas.js";
 import { PAL, RARITY_PAL } from "./palette.js";
@@ -23,6 +23,7 @@ import { loadSettings, saveSettings, applySettings } from "./settings.js";
 import { GAME_CONFIG } from "./config.js";
 import { BOSS_CANDIDATES } from "./data/bosses.js";
 import { ARMORED } from "./data/levels.js";
+import { getAllBosses } from "./boss.js";
 
 export { drawUI } from "./ui_hud.js";
 
@@ -127,6 +128,7 @@ export function debugHitRects() {
         codexTabs: codexTabBtns, codexNext: codexNextBtn, codexPrev: codexPrevBtn,
         statusTabs: statusTabBtns, statusBack: statusBackBtn,
         rewardCards, curseCards, penaltyCards, eventButtons, swapCards,
+        codexItems: codexItemRects,
     };
 }
 
@@ -262,7 +264,7 @@ export function drawMenu() {
 function drawCard(x, y, w, h, opts) {
     const {
         icon, name, desc, rarity = "common", typeLabel = null,
-        footer = null, footerColor = null, tag = null, danger = false,
+        footer = null, footerColor = null, statLine = null, tag = null, danger = false,
     } = opts;
     const rp = danger
         ? { base: PAL.blood2, light: PAL.blood3, dark: PAL.blood1 }
@@ -307,6 +309,58 @@ function drawCard(x, y, w, h, opts) {
     if (footer) {
         pTextShadow(footer, x + w / 2, y + h - PX * 3, footerColor || PAL.mist0, { size: 11, align: "center" });
     }
+    // 当前数值（在 footer 上方，避开角标区域）
+    if (statLine) {
+        pTextShadow(statLine, x + w / 2, y + h - (tag ? PX * 12 : PX * 7), PAL.mist0, { size: 10, align: "center" });
+    }
+}
+
+// 当前数值映射：奖励 id → 当前玩家数值文字
+function rewardStatLine(def, count) {
+    const p = state.player;
+    if (!p) return null;
+    switch (def.id) {
+        case "power_ball": case "mega_ball": case "annihil_ball": case "double_strike":
+        case "doom_blast": case "init_weakpoint":
+            return `当前伤害：${p.ballDamage}`;
+        case "slow_ball":
+            return `当前速度：${Math.round(p.ballSpeedMul * 100)}%`;
+        case "godseed":
+            return `速度 ${Math.round(p.ballSpeedMul * 100)}% · 伤害 ${p.ballDamage}`;
+        case "extra_life": case "big_life": case "life_crown": case "init_regen": case "init_tenacity":
+            return `当前生命：${Math.floor(p.lives)}`;
+        case "wider_paddle": case "giant_paddle": case "titan_arm":
+            return `当前挡板：${Math.round((1 + p.paddleBonus) * 100)}%`;
+        case "score_boost": case "entry_gain": case "spark_core": case "gold_soul":
+        case "greed_eye": case "treasury":
+            return `当前倍率：×${p.scoreMul.toFixed(1)}`;
+        case "cd_reduction": case "rapid_cooling": case "time_weaver":
+            return `当前 CD：${Math.round(p.skillCdMul * 100)}%`;
+        case "piercing":
+            return `当前穿透：${p.maxPiercing}`;
+        case "dual_ball": case "blessed_start":
+            return `开局球数：${p.startBalls}`;
+        case "giant_orb": case "titan_ball":
+            return `当前体积：${Math.round(p.ballRadiusMul * 100)}%`;
+        case "lucky":
+            return `选卡数量：${3 + p.extraChoices}`;
+        case "compass": case "lucky_charm":
+            return `稀有概率：+${p.luckyBonus || 0}%`;
+        case "init_shatter":
+            return `触发概率：${Math.round((p.shatterChance || 0) * 100)}%`;
+        case "init_deflect":
+            return `减速范围：${p.deflectRadius || 0}px`;
+        case "init_surge":
+            return `累积：${p.surgeCounter || 0}/${p.surgeNeed || 5}`;
+        case "split_ball":
+            return `分裂间隔：${p.perks.split_ball ? 5 : 10} 个`;
+        case "bouncy_combo":
+            return p.perks.bouncy_combo ? "已激活" : null;
+        default:
+            if (def.type === "skill") return null;
+            if (count > 0) return `已拥有 ×${count}`;
+            return null;
+    }
 }
 
 export function drawRewardScreen() {
@@ -339,6 +393,9 @@ export function drawRewardScreen() {
             footer = `冷却 ${def.cooldown}s`;
         }
 
+        // 当前数值
+        const statLine = rewardStatLine(def, count);
+
         drawCard(cx, cardY, CARD_W, CARD_H, {
             icon: def.icon,
             name: def.name,
@@ -348,13 +405,18 @@ export function drawRewardScreen() {
             tag: def.bossOnly ? "★ BOSS 专属" : null,
             footer,
             footerColor,
+            statLine,
         });
         rewardCards.push({ x: cx, y: cardY, w: CARD_W, h: CARD_H, def });
     }
 
-    // 跳过按钮
+    // 跳过按钮（开局奖励不可跳过，必须选一张）
     const sy = cardY + CARD_H + 14;
-    state._skipBtn = pButton((W - BTN_SM_W) / 2, sy, BTN_SM_W, BTN_SM_H, "跳过", { kind: "secondary", size: 13 });
+    if (state.gameState !== STATE.START_REWARD) {
+        state._skipBtn = pButton((W - BTN_SM_W) / 2, sy, BTN_SM_W, BTN_SM_H, "跳过", { kind: "secondary", size: 13 });
+    } else {
+        state._skipBtn = null;
+    }
 }
 
 // ═══ 技能替换 ═══════════════════════════════════════════
@@ -736,6 +798,7 @@ export function drawCurseScreen() {
         const c = choices[i];
         const cx = rows[i].x;
         const desc = typeof c.desc === "function" ? c.desc(state.curseStrength) : c.desc;
+        const statLine = curseStatLine(c.id);
         drawCard(cx, cardY, cw, chh, {
             icon: c.icon,
             name: c.name,
@@ -743,8 +806,54 @@ export function drawCurseScreen() {
             danger: true,
             footer: `强度 ×${state.curseStrength} · 永久`,
             footerColor: PAL.blood3,
+            statLine,
         });
         curseCards.push({ x: cx, y: cardY, w: cw, h: chh });
+    }
+}
+
+// 诅咒当前数值映射
+function curseStatLine(id) {
+    const p = state.player;
+    if (!p) return null;
+    switch (id) {
+        case "swift": return `当前速度：${Math.round(p.ballSpeedMul * 100)}%`;
+        case "rust": return `当前伤害：${p.ballDamage}`;
+        case "barren": return `当前倍率：×${p.scoreMul.toFixed(1)}`;
+        case "dim": return `稀有概率：+${p.luckyBonus || 0}%`;
+        case "fortify": return `方块血量 +${p.curseBlockHpBonus || 0}`;
+        case "arm": return `重甲概率：+${Math.round((p.curseArmoredBonus || 0) * 100)}%`;
+        case "bullet": return `敌弹速度：${Math.round((p.curseBulletSpeedMul || 1) * 100)}%`;
+        case "cd": return `当前 CD：${Math.round(p.skillCdMul * 100)}%`;
+        case "shrink": return `当前挡板：${Math.round((1 + p.paddleBonus) * 100)}%`;
+        case "hitbox": return `受击面积：${Math.round((1 + (p.curseHitPenalty || 0)) * 100)}%`;
+        case "dense": return `方块密度：+${Math.round((p.curseDensityBonus || 0) * 100)}%`;
+        case "launch": return `发射速度：${Math.round((p.curseLaunchSpeedMul || 1) * 100)}%`;
+        case "sticky": return `挡板响应：${Math.round((1 - (p.curseMoveResist || 0)) * 100)}%`;
+        case "heal": return `治疗效果：${Math.round((p.healMul || 1) * 100)}%`;
+        case "misfortune": return `选卡数量：${3 + p.extraChoices}`;
+        case "overcrowd": return `多球上限：${10 - (p.curseMaxBallsPenalty || 0)}`;
+        case "ethereal": return `当前穿透：${p.maxPiercing}`;
+        case "blur": return `当前体积：${Math.round(p.ballRadiusMul * 100)}%`;
+        case "accident": return `事件概率：${Math.round((0.3 - (p.curseEventReduce || 0)) * 100)}%`;
+        case "slowfall": return `落地扣血：${1 + (p.curseFallDamage || 0)}`;
+        case "weakness": return `当前伤害：${p.ballDamage}`;
+        case "fog": return `迷雾强度：${Math.round((p.curseFog || 0) * 100)}%`;
+        case "decay": return `击碎加速：+${((p.curseDecelPerLevel || 0) * 100).toFixed(1)}%`;
+        case "echo": return `诅咒可选项：${3 - (p.curseChoicePenalty || 0)}`;
+        case "thorn": return `受击扣血：${1 + (p.curseExtraHitDmg || 0)}`;
+        case "void_mark": return `弹幕伤害：${1 + (p.curseBulletExtraDmg || 0)}`;
+        case "chaos_grasp": return `当前速度：${Math.round(p.ballSpeedMul * 100)}%`;
+        case "time_warp": return `当前 CD：${Math.round(p.skillCdMul * 100)}%`;
+        case "shadow_clone": return `受击面积：${Math.round((1 + (p.curseHitPenalty || 0)) * 100)}%`;
+        case "void_rift": return `落地扣血：${1 + (p.curseFallDamage || 0)}`;
+        case "fate_seal": return `诅咒可选项：${3 - (p.curseChoicePenalty || 0)}`;
+        case "blood_oath": return `落地扣血：${1 + (p.curseFallDamage || 0)}`;
+        case "seal": return `技能槽：${2 - (p.curseSkillSlotPenalty || 0)}`;
+        case "cataclysm": return `方块血量 +${p.curseBlockHpBonus || 0} · 密度 +${Math.round((p.curseDensityBonus || 0) * 100)}%`;
+        case "blind": return `选卡：${3 + p.extraChoices} · 稀有：+${p.luckyBonus || 0}%`;
+        case "martyr": return `弹幕伤害：${1 + (p.curseBulletExtraDmg || 0)}`;
+        default: return null;
     }
 }
 
@@ -788,13 +897,20 @@ export function drawCodex() {
     drawIcon("book", 34, 28, 3, PAL.gold3);
     pText("图鉴", 56, 35, PAL.gold2, { size: 22, bold: true });
 
+    // 如果正在查看详情，直接画详情页
+    if (state.codexItem) {
+        drawCodexItemDetail(state.codexItem);
+        return;
+    }
+
     // Tab
-    const tabs = ["奖励", "诅咒", "事件", "皮肤"];
-    const tw = 104, th = 32;
-    const tsx = (W - (tabs.length * (tw + 6) - 6)) / 2;
+    const tabs = ["奖励", "诅咒", "事件", "皮肤", "敌人"];
+    const tw = 104, th = 32, tgap = 6;
+    const totalW = tabs.length * tw + (tabs.length - 1) * tgap;
+    const tsx = (W - totalW) / 2;
     codexTabBtns = [];
     for (let i = 0; i < tabs.length; i++) {
-        const tx = snap(tsx + i * (tw + 6));
+        const tx = snap(tsx + i * (tw + tgap));
         const active = i === codexTab;
         const ty = 66;
         pChamferFill(tx, ty, tw, th, PAL.ink0, 2);
@@ -825,13 +941,23 @@ export function drawCodex() {
         });
     }
 
-    const datasets = [REWARDS, [...CURSES, ...HEAVY_CURSES], EVENTS, skinData];
+    const bossData = getAllBosses().map((b) => ({
+        icon: "skull",
+        name: b.encountered ? b.name : "???",
+        desc: b.encountered ? `第 ${b.level} 层 · ${bossTypeLabel(b.bossType)}` : "未遭遇，无法查看详情",
+        color: b.color,
+        locked: !b.encountered,
+        _boss: b,
+    }));
+
+    const datasets = [REWARDS, [...CURSES, ...HEAVY_CURSES], EVENTS, skinData, bossData];
     const data = datasets[codexTab] || [];
     const totalPages = Math.max(1, Math.ceil(data.length / perPage));
     if (codexPage >= totalPages) codexPage = totalPages - 1;
     const pageItems = data.slice(codexPage * perPage, codexPage * perPage + perPage);
 
     // 列表：每行一个浮雕条目
+    codexItemRects = [];
     let ly = 112;
     const lh = 58;
     const rowW = W - 72;
@@ -863,7 +989,10 @@ export function drawCodex() {
             drawIcon("lock", W - 52, ly + 26, 2, PAL.blood2);
         } else if (codexTab === 0 && item.type && REWARD_TYPE_NAME[item.type]) {
             pTextShadow(REWARD_TYPE_NAME[item.type], W - 48, ly + 30, PAL.mist0, { size: 10, align: "right" });
+        } else if (codexTab === 4 && !locked) {
+            pTextShadow("点击查看", W - 48, ly + 30, PAL.mist0, { size: 10, align: "right" });
         }
+        codexItemRects.push({ x: 36, y: ly, w: rowW, h: lh - 6, item });
         ly += lh;
     }
 
@@ -879,6 +1008,78 @@ export function drawCodex() {
     pTextShadow(`${codexPage + 1} / ${totalPages} · ESC 返回 · ←→ 翻页`, W / 2, pby + 21, PAL.mist0, {
         size: 12, align: "center",
     });
+}
+
+function bossTypeLabel(type) {
+    return { executor: "执行者", mother: "腐化体", hive: "机械蜂巢", priest: "司祭" }[type] || type;
+}
+
+// 图鉴条目点击命中
+let codexItemRects = [];
+export function hitCodexItem(x, y) {
+    for (const r of codexItemRects) {
+        if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r.item;
+    }
+    return null;
+}
+
+// 图鉴详情页：Boss 信息
+function drawCodexItemDetail(item) {
+    const boss = item._boss;
+    if (!boss) { state.codexItem = null; return; }
+
+    const SKILL_DESC = {
+        charge: "冲锋：锁定玩家位置直线冲撞，撞墙后进入易伤",
+        slam: "跳砸：跃起砸向地面，冲击波覆盖大范围",
+        summon: "召唤：召唤各类仆从助战，击杀会反噬 Boss",
+        altar: "祭坛：部署诅咒祭坛，需要优先摧毁解除诅咒",
+    };
+
+    const PATTERN_DESC = {
+        fan: "扇形弹幕：朝玩家方向扇形扩散",
+        ring: "环形弹幕：从四周包夹的环形弹幕",
+        split: "分裂弹幕：命中前一分为二，封锁走位",
+        homing: "追踪弹幕：追踪玩家位置，转弯较慢可闪避",
+        wave: "波浪弹幕：沿正弦轨迹飘忽前进",
+        spiral: "螺旋弹幕：持续旋转倾泻，压制阵地",
+    };
+
+    const lines = [
+        `第 ${boss.level} 层 · ${boss.bossType}`,
+        "",
+        "【技能】",
+        ...(boss.skills || []).map((s) => `  ${SKILL_DESC[s] || s}`),
+        "",
+        "【弹幕】",
+        ...(boss.patterns || []).map((p) => `  ${PATTERN_DESC[p] || p}`),
+    ];
+
+    const lineH = 22;
+    const panelH = Math.min(H - 40, 200 + lines.length * lineH);
+    const m = pModal(580, panelH, boss.name, { icon: "skull", accent: boss.color, scrim: 0.88 });
+
+    let ly = m.bodyY + PX;
+    for (const line of lines) {
+        if (line === "") { ly += PX * 2; continue; }
+        const isHeader = line.startsWith("【");
+        pTextShadow(line, m.x + PX * 4, ly, isHeader ? PAL.gold3 : PAL.bone0, {
+            size: isHeader ? 13 : 12, bold: isHeader, align: "left",
+        });
+        ly += lineH;
+    }
+
+    // 返回按钮
+    const by = m.y + panelH - BTN_SM_H - PX * 4;
+    pButton(snap((W - BTN_SM_W) / 2), by, BTN_SM_W, BTN_SM_H, "返回", { kind: "secondary", size: 13 });
+}
+
+export function hitCodexBackButton(x, y) {
+    if (!state.codexItem) return false;
+    const m = lastModal;
+    if (!m) return false;
+    const by = m.y + m.h - BTN_SM_H - PX * 4;
+    const bx = snap((W - BTN_SM_W) / 2);
+    return x >= bx && x <= bx + BTN_SM_W && y >= by && y <= by + BTN_SM_H;
 }
 
 // ═══ 设置 ═══════════════════════════════════════════════

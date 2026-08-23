@@ -47,7 +47,7 @@ export const BOSS_CANDIDATES = {
             name: "机械蜂巢", color: "#ff5a8c", hp: 392, bulletSpeed: 1.75,
             bossType: "hive", tier: 2,
             skills: ["summon"],
-            patterns: ["fan", "split"],
+            patterns: ["fan", "homing", "split"],
             desc: "三阶段：纯弹幕 → 部署无人机 → 主炮激光（有预警，可打断）",
         },
         {

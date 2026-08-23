@@ -9,7 +9,7 @@ export const REWARD_TYPE_NAME = { bonus: "加成", skill: "技能", ability: "�
 export const REWARD_DATA = [
     // ═══ 加成 ═══
     { id: "power_ball", name: "强化球体", icon: "⚡", rarity: "common", type: "bonus", maxStacks: 5, desc: "球伤害 +1" },
-    { id: "slow_ball", name: "减速球", icon: "🐢", rarity: "common", type: "bonus", maxStacks: 3, desc: "球速度 -12%（更易控制）" },
+    { id: "slow_ball", name: "减速球", icon: "🐢", rarity: "common", type: "bonus", maxStacks: 3, desc: "球速度 -12%" },
     { id: "extra_life", name: "快速修复", icon: "❤️", rarity: "common", type: "bonus", maxStacks: 99, applyId: "lives1", desc: "获得 1 条额外生命" },
     { id: "score_boost", name: "分数加成", icon: "⭐", rarity: "common", type: "bonus", maxStacks: 99, applyId: "score500", desc: "立即获得 50 分" },
     { id: "wider_paddle", name: "加宽挡板", icon: "↔️", rarity: "common", type: "bonus", maxStacks: 4, desc: "挡板宽度 +25%" },
@@ -50,19 +50,19 @@ export const REWARD_DATA = [
     // ═══ 被动能力 ═══
     { id: "piercing", name: "电动力学", icon: "💠", rarity: "uncommon", type: "ability", maxStacks: 3, desc: "球击碎方块后可穿透 1 次" },
     { id: "dual_ball", name: "双球开局", icon: "🔵", rarity: "common", type: "ability", maxStacks: 3, desc: "每关开始时额外获得 1 个球" },
-    { id: "giant_orb", name: "巨型球", icon: "🪐", rarity: "common", type: "ability", maxStacks: 2, desc: "球体积 +30%，更容易命中" },
+    { id: "giant_orb", name: "巨型球", icon: "🪐", rarity: "common", type: "ability", maxStacks: 2, desc: "球体积 +30%" },
     { id: "explosion_res", name: "爆炸共鸣", icon: "🧨", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "击碎方块时有 25% 概率对相邻方块造成 1 点伤害" },
     { id: "echo_hit", name: "回音击", icon: "🔔", rarity: "common", type: "ability", maxStacks: 2, desc: "击碎方块时弹片对周围随机方块造成 1 点伤害" },
-    { id: "split_ball", name: "分裂之球", icon: "🧬", rarity: "rare", type: "ability", maxStacks: 1, desc: "球每撞击 6 次方块便分裂出 1 个新球" },
+    { id: "split_ball", name: "分裂之球", icon: "🧬", rarity: "rare", type: "ability", maxStacks: 1, desc: "每击碎 5 个方块便分裂出 1 个新球" },
     { id: "bouncy_combo", name: "弹射连击", icon: "🛸", rarity: "rare", type: "ability", maxStacks: 1, desc: "球击碎方块后不会反弹，直接继续飞行" },
     { id: "vampire", name: "死亡收割", icon: "🧛", rarity: "rare", type: "ability", maxStacks: 2, desc: "击碎方块时有 1.5% 概率恢复 1 条生命" },
     { id: "gold_soul", name: "黄金之魂", icon: "🏆", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "所有来源的分数 ×2" },
     { id: "iron_will", name: "钢铁意志", icon: "🛐", rarity: "rare", type: "ability", maxStacks: 1, desc: "受到弹幕伤害时有 50% 概率格挡" },
     { id: "thorn_armor", name: "荆棘反甲", icon: "🌵", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "挡板被弹幕命中时，反弹对 Boss 造成 5 点伤害" },
-    { id: "lifebuoy", name: "救生圈", icon: "💺", rarity: "uncommon", type: "ability", maxStacks: 1, desc: "每关开始获得 1 次免费救球：球落地自动返回" },
+    { id: "lifebuoy", name: "救生圈", icon: "💺", rarity: "uncommon", type: "ability", maxStacks: 1, desc: "每关开始获得 1 次免费救球" },
     { id: "meteor", name: "末路追踪", icon: "☄️", rarity: "rare", type: "ability", maxStacks: 1, desc: "每击碎 8 个方块，自动对场上血量最高的方块造成 3 点伤害" },
-    { id: "lucky", name: "幸运女神", icon: "🍀", rarity: "rare", type: "ability", maxStacks: 1, desc: "奖励选择数量 +1（局外收益）" },
-    { id: "compass", name: "寻宝罗盘", icon: "🧭", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "奖励稀有度概率提高 10%（局外收益）" },
+    { id: "lucky", name: "幸运女神", icon: "🍀", rarity: "rare", type: "ability", maxStacks: 1, desc: "奖励选择数量 +1" },
+    { id: "compass", name: "寻宝罗盘", icon: "🧭", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "奖励稀有度概率提高 10%" },
     // ═══ 新增奖励 ═══
     { id: "bounce_shield", name: "弹射护盾", icon: "🛡️", rarity: "uncommon", type: "ability", maxStacks: 1, desc: "被弹幕击中时 15% 概率反弹子弹" },
     { id: "swift_move", name: "疾风步", icon: "💨", rarity: "common", type: "bonus", maxStacks: 3, desc: "挡板响应速度 +15%" },
@@ -83,4 +83,16 @@ export const REWARD_DATA = [
     { id: "danmaku_lord", name: "彩虹", icon: "🎆", rarity: "rare", type: "ability", maxStacks: 1, bossOnly: true, desc: "释放主动技能时额外发射 3 个球" },
     { id: "treasury", name: "王之财宝", icon: "👑", rarity: "rare", type: "bonus", maxStacks: 2, bossOnly: true, applyId: "score2000", desc: "立即获得 200 分，所有分数获取 +20%" },
     { id: "godseed", name: "神速之星", icon: "🌠", rarity: "rare", type: "bonus", maxStacks: 2, bossOnly: true, desc: "球速度 -15%，球伤害 +1" },
+];
+
+// ═══ 初始奖励（开局选卡专用，独立于主池） ═══
+// 稀有度 initial，绿色，能力型，所有效果不与主池奖励重复
+export const INITIAL_REWARD_DATA = [
+    { id: "init_shatter", name: "碎裂余波", icon: "💥", rarity: "initial", type: "ability", maxStacks: 2, desc: "击碎方块时 30% 概率对左右相邻方块造成 1 点伤害" },
+    { id: "init_weakpoint", name: "弱点打击", icon: "🎯", rarity: "initial", type: "ability", maxStacks: 2, desc: "对满血方块额外造成 1 点伤害" },
+    { id: "init_deflect", name: "弹幕偏转", icon: "🌀", rarity: "initial", type: "ability", maxStacks: 2, desc: "挡板附近敌弹速度 -20%" },
+    { id: "init_precision", name: "精准打击", icon: "🗡️", rarity: "initial", type: "ability", maxStacks: 1, desc: "球在空中每 2 秒伤害 +0.5，上限 +3" },
+    { id: "init_surge", name: "能量涌动", icon: "⚡", rarity: "initial", type: "ability", maxStacks: 2, desc: "每击碎 5 个方块，下一击伤害 +1" },
+    { id: "init_regen", name: "再生", icon: "❤️‍🩹", rarity: "initial", type: "ability", maxStacks: 1, desc: "每过 5 关恢复 1 条命" },
+    { id: "init_tenacity", name: "不屈", icon: "🔥", rarity: "initial", type: "ability", maxStacks: 1, desc: "受到致命伤害时保留 1 条命，每局触发一次" },
 ];

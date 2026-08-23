@@ -16,6 +16,7 @@ import { state, addScore, loseLife } from "./state.js";
 import { createBlocksFromGrid, generateLevel } from "./levels.js";
 import {
     getRewardChoices,
+    getInitialRewardChoices,
     getBossRewardChoices,
     applyReward,
     replaceSkill,
@@ -117,6 +118,18 @@ export function resetPlayer() {
         bossDefeated: 0,
         siphonTimer: 0,
         _wealthTimer: 0,
+        // 初始奖励（开局独立池）效果字段
+        shatterChance: 0, // 碎裂余波：击碎方块时对左右相邻造成伤害的概率
+        weakpointDmg: 0, // 弱点打击：对满血方块额外伤害
+        deflectRadius: 0, // 弹幕偏转：挡板附近敌弹减速范围
+        precisionDmg: 0, // 精准打击：空中累积伤害加成
+        precisionMax: 0, // 精准打击：伤害上限
+        surgeCounter: 0, // 能量涌动：击碎计数
+        surgeBonus: 0, // 能量涌动：下一击伤害加成
+        surgeNeed: 5, // 能量涌动：需要击碎数
+        regenCounter: 0, // 再生：关卡计数，每 5 关恢复 1 命
+        tenacityUsed: 0, // 不屈：本局是否已触发过（0=未触发，1=已触发）
+        _shieldGranted: 0, // 守卫核心：本关是否已发放过护盾
     };
     recalcStats();
 }
@@ -142,6 +155,7 @@ export function resetBall() {
             blockHits: 0,
             poisonTimer: 0,
             poisonImmune: 0,
+            airFrames: 0, // 精准打击：空中累计帧数
             // 主球（金色球）。身份固定：落地即扣血并回到挡板，永不由分裂球顶替。
             isMain: true,
         },
@@ -160,8 +174,15 @@ export function loadLevel(num, skipCurse = false) {
     state.boss = null;
     state.bossBullets = [];
     state.enemyBullets = [];
+    state.bossDangerZones = [];
     state.challenge = null;
     recalcStats(); // 每关刷新救生圈等按关重置的属性
+    // 重置初始奖励的每关计数
+    if (state.player) {
+        state.player.surgeCounter = 0;
+        state.player.surgeBonus = 0;
+        state.player._shieldGranted = 0; // 守卫核心：每关重置
+    }
     resetPaddle();
     resetBall();
     if (state.player.startBalls > 1) {
@@ -175,6 +196,15 @@ export function loadLevel(num, skipCurse = false) {
 export function startGameRun() {
     clearProgressSave();
     clearGuides(); // 清掉可能的残留引导，避免盖住开局选卡
+    // 清空上一局残留的视觉特效与危险区
+    state.particles = [];
+    state.rings = [];
+    state.floatingTexts = [];
+    state.boss = null;
+    state.bossBullets = [];
+    state.enemyBullets = [];
+    state.bossDangerZones = [];
+    state.challenge = null;
     resetPlayer();
     // 给予皮肤开场技能（从 REWARD_MAP 中查找）
     const skinIdx = getSelectedSkin();
@@ -189,7 +219,7 @@ export function startGameRun() {
     state.gameState = STATE.START_REWARD;
     state.rewardTitle = "选择你的开局奖励";
     state.rareOnly = false;
-    state.levelChoices = getRewardChoices(3 + state.player.extraChoices);
+    state.levelChoices = getInitialRewardChoices(3 + state.player.extraChoices);
     state.player.rewardBoost = null;
     queueGuideOnce("startReward"); // 首次开局解释选卡规则
 }
@@ -236,6 +266,16 @@ export function continueFromSave() {
 export function clearLevel() {
     const cleared = state.player.level;
     state.player.level++;
+
+    // 再生：每过 5 关恢复 1 条命
+    if (state.player.perks?.init_regen) {
+        state.player.regenCounter = (state.player.regenCounter || 0) + 1;
+        if (state.player.regenCounter >= 5) {
+            state.player.regenCounter = 0;
+            state.player.lives += 1;
+            spawnFloatingText(400, 240, "再生！生命 +1", PAL.moss3);
+        }
+    }
 
     if (cleared >= TOTAL_LEVELS) {
         state.gameState = STATE.VICTORY;
@@ -418,6 +458,7 @@ export function startBossFight() {
     }
     state.gameState = STATE.PLAYING;
     if (state.player.entryBonus > 0) addScore(state.player.entryBonus);
+    state.player._shieldGranted = 0; // 守卫核心：Boss 战重置
     playEventOpen();
     spawnFloatingText(400, 200, "BOSS 来袭", PAL.blood3);
     saveProgress();
@@ -462,6 +503,7 @@ export function beginChallengeRun() {
     state.boss = null;
     state.bossBullets = [];
     state.enemyBullets = [];
+    state.bossDangerZones = [];
     resetPaddle();
     resetBall();
     if (state.player.startBalls > 1) {
@@ -553,7 +595,14 @@ export function launchBalls() {
             b.vy = Math.sin(angle) * b.speed;
         }
     }
-    if (launchedAny) playLaunch();
+    if (launchedAny) {
+        playLaunch();
+        // 守卫核心：首次发射后给予护盾
+        if (state.player.perks?.guardian_core > 0 && !state.player._shieldGranted) {
+            state.player.shieldTimer = 120;
+            state.player._shieldGranted = true;
+        }
+    }
 }
 
 export function tryUseSkill(index) {

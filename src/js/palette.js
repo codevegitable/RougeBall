@@ -81,6 +81,7 @@ export const BLOCK_TIERS = [
 
 // 稀有度配色
 export const RARITY_PAL = {
+    initial: { base: PAL.moss2, light: PAL.moss3, dark: PAL.moss1 },
     common: { base: PAL.mist0, light: PAL.mist1, dark: PAL.stone2 },
     uncommon: { base: PAL.arc2, light: PAL.arc3, dark: PAL.arc1 },
     rare: { base: PAL.gold2, light: PAL.gold3, dark: PAL.gold1 },

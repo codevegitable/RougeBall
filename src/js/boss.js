@@ -11,6 +11,34 @@ import { HUD_TOP_H } from "./layout.js";
 import { drawIcon } from "./icons.js";
 import { drawBossSprite, drawBossCrown } from "./boss_art.js";
 
+// ─── Boss 遭遇记录（用于图鉴） ─────────────────────────────
+const BOSS_LOG_KEY = "bounceRoguelikeBossLog";
+
+function loadBossLog() {
+    try { return new Set(JSON.parse(localStorage.getItem(BOSS_LOG_KEY) || "[]")); }
+    catch { return new Set(); }
+}
+
+function saveBossLog(log) {
+    try { localStorage.setItem(BOSS_LOG_KEY, JSON.stringify([...log])); }
+    catch { /* ignore */ }
+}
+
+export function hasEncounteredBoss(name) {
+    return loadBossLog().has(name);
+}
+
+export function getAllBosses() {
+    const seen = loadBossLog();
+    const result = [];
+    for (const level of [15, 30, 45, 50]) {
+        for (const b of BOSS_CANDIDATES[level]) {
+            result.push({ ...b, level, encountered: seen.has(b.name) });
+        }
+    }
+    return result;
+}
+
 // 以任意中心绘制像素圆（pCircle 的别名，便于 boss 局部坐标系调用）
 const pCircleAt = (cx, cy, r, color) => pCircle(cx, cy, r, color);
 
@@ -161,6 +189,12 @@ t: 0,
     state.bossDangerZones = [];
     // 开场弹幕
     state.boss.volleyTimer = 60;
+    // 蜂巢 Boss 追踪弹间隔延长 1/3
+    if (def.bossType === "hive") state.boss.homingInterval = 21;
+    // 记录遭遇（用于图鉴）
+    const log = loadBossLog();
+    log.add(def.name);
+    saveBossLog(log);
 }
 
 export function updateBoss() {
@@ -230,6 +264,8 @@ export function updateBoss() {
     } else {
         // 闲时发射弹幕
         fireVolley(boss, dt);
+        // 消费持续弹幕（追踪/螺旋），这些由 fireVolley 设置队列后在此排放
+        tickSustainedPatterns(boss, dt);
     }
 
     // 更新召唤物
@@ -296,7 +332,7 @@ function onHivePhaseEnter(boss) {
     // 第一波不要贴着喘息窗结束就来
     boss.volleyTimer = 60;
     boss.laserTimer = 40;
-    const label = boss.phase === 1 ? "第二阶段：蜂群部署！" : "第三阶段：主炮充能！";
+    const label = boss.phase === 1 ? "第二阶段：蜂群部署！无人机来袭" : "第三阶段：主炮充能！预警期击打可打断";
     spawnFloatingText(boss.x, boss.y - 60, label, boss.color);
     screenShake(8, 200);
     playBossShoot();
@@ -358,7 +394,7 @@ function tickSustainedPatterns(boss, dt) {
         busy = true;
         boss.homingTick -= dt;
         if (boss.homingTick <= 0) {
-            boss.homingTick = 14;
+            boss.homingTick = boss.homingInterval || 14;
             boss.homingQueue--;
             aimedFan(boss, boss.bulletSpeed * 0.8, 1, { homing: true });
         }
@@ -386,6 +422,7 @@ function hiveSummonTick(boss, dt) {
             continue;
         }
         spawnHiveMinion(boss, kind);
+        spawnHiveMinion(boss, kind); // 二阶段召唤物数量 ×2
     }
 }
 
@@ -394,7 +431,7 @@ function spawnHiveMinion(boss, kind) {
     const dist = 120 + Math.random() * 60;
     const mx = Math.max(40, Math.min(W - 40, boss.x + Math.cos(angle) * dist));
     const my = Math.max(80, Math.min(H - 60, boss.y + Math.sin(angle) * dist));
-    const minionHp = Math.round(18 + tierWeight(boss.tier) * 8);
+    const minionHp = Math.round((18 + tierWeight(boss.tier) * 8) / 2);
     const colors = { turret: PAL.ember2, shield: PAL.gold3, bomber: PAL.blood2 };
     const names = { turret: "炮台", shield: "护盾", bomber: "自爆" };
     boss.minions.push({
@@ -520,7 +557,9 @@ function onLaserHit(beam) {
     screenShake(11, 260);
     playPlayerHit();
     spawnParticles(px, py, PAL.blood3, 14);
-    loseLife(1);
+    // 蜂巢激光伤害 3 点
+    if (state.boss?.bossType === "hive") loseLife(3);
+    else loseLife(1);
 }
 
 // 预警期内每次命中 Boss 削掉一道束；削光则取消本波并进入长易伤。由 damageBoss 调用。
@@ -635,7 +674,7 @@ function executeCharge(boss, a, dt) {
 function onChargeWallHit(boss) {
     screenShake(12, 200);
     spawnParticles(boss.x, boss.y, PAL.bone1, 20);
-    spawnFloatingText(boss.x, boss.y - 30, "撞墙眩晕！", PAL.gold3);
+    spawnFloatingText(boss.x, boss.y - 30, "撞墙眩晕！全力输出", PAL.gold3);
     playWallHit();
 }
 
@@ -644,7 +683,7 @@ function startRecovery(boss, frames) {
     boss.vulnerable = true;
     boss.action = null;
     boss.actionCooldown = 0;
-    spawnFloatingText(boss.x, boss.y - 50, "易伤！", PAL.gold3);
+    spawnFloatingText(boss.x, boss.y - 50, "易伤！伤害 ×1.5", PAL.gold3);
 }
 
 // ─── 跳砸 ─────────────────────────────────────────────────
@@ -675,12 +714,13 @@ function executeSlam(boss, a, dt) {
             // 冲击波
             const waveSpeed = 4 + tierWeight(boss.tier) * 0.4;
             state.bossDangerZones.push({ x: boss.x, y: boss.y, r: 0, maxR: 180 + boss.tier * 20, life: 60, type: "shockwave", speed: waveSpeed });
-            // 危险区：tier 0 不生成，tier 1 在落点生成较大红圈，tier 2+ 在落点生成标准红圈
+            // 危险区：tier 0 不生成，tier 1 在落点生成较大红圈（持续2秒），tier 2+ 在落点生成标准红圈
             if (boss.tier >= 1) {
                 const r = boss.tier === 1 ? 67 : 50 + boss.tier * 15;
                 state.bossDangerZones.push({
-                    x: boss.x, y: boss.y, r, life: 240, type: "hazard", color: boss.color,
+                    x: boss.x, y: boss.y, r, life: boss.tier === 1 ? 120 : 240, type: "hazard", color: boss.color,
                 });
+                spawnFloatingText(boss.x, boss.y - 80, "危险区域！远离", PAL.blood3);
             }
             // 挡板在冲击波范围内则扣血
             const p = state.paddle;
@@ -758,7 +798,7 @@ function spawnMinionForType(boss) {
     const bossId = state.boss;
     // 血量沿 tierWeight 放缓增长。hp 与 maxHp 必须取同一个值——
     // 原来是 hp=20+t*10 / maxHp=15+t*8，hp 恒大于 maxHp，血条比例始终 >100%。
-    const minionHp = Math.round(18 + tierWeight(boss.tier) * 8);
+    const minionHp = Math.round((18 + tierWeight(boss.tier) * 8) / 2);
     boss.minions.push({
         x: mx, y: my, r: 14, hp: minionHp,
         maxHp: minionHp, type: picked,
@@ -800,10 +840,10 @@ function updateMinions(boss, dt) {
         if (m.type === "poison") {
             m.poisonTimer -= dt;
             if (m.poisonTimer <= 0) {
-                m.poisonTimer = 120;
-                const r = 40;
-                state.bossDangerZones.push({ x: boss.x + (m.x - boss.x) * 0.25, y: m.y + 20, r, life: 180, type: "hazard", color: PAL.vio2, _poison: true });
-                spawnFloatingText(m.x, m.y - 20, "毒雾扩散！", PAL.vio3);
+m.poisonTimer = 120;
+        const r = 40;
+        state.bossDangerZones.push({ x: boss.x + (m.x - boss.x) * 0.25, y: m.y + 20, r, life: 180, type: "hazard", color: PAL.vio2, _poison: true });
+        spawnFloatingText(m.x, m.y - 20, "毒雾扩散！伤害 -25%", PAL.vio3);
             }
         }
         // 藤蔓：束缚挡板（短暂移速降低）
@@ -1217,6 +1257,9 @@ function updateBossBullets() {
         }
 
         if (b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30) { bullets.splice(i, 1); continue; }
+
+        // 追踪弹接近挡板时消失，避免水平无限追踪
+        if (b.homing && b.y > py - 15) { bullets.splice(i, 1); continue; }
 
         // 蜂巢：触底即消。判定用弹丸上沿（y - r）越过底墙，
         // 因此剔除时该弹已不可能满足下面的命中条件，不会吞掉一次本该生效的判定。

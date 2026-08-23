@@ -2,7 +2,6 @@ import { W, H, COLORS, MAX_BALLS, BALL_BASE_SPEED, PADDLE_BASE_W, BALL_BLOCK_ACC
 import { state, addScore, loseLife } from "./state.js";
 import { spawnParticles } from "./particles.js";
 import { screenShake, hitStop, flashPaddle, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
-import { spawnExtraBalls } from "./rewards.js";
 import { damageBoss, bulletColor } from "./boss.js";
 import {
     playWallHit,
@@ -53,6 +52,11 @@ export function updateEnemies() {
     if (bullets.length > 100) bullets.splice(0, bullets.length - 100);
     for (let i = bullets.length - 1; i >= 0; i--) {
         const bu = bullets[i];
+        // 弹幕偏转：挡板附近敌弹减速
+        if (p.deflectRadius > 0 && bu.y > state.paddle.y - p.deflectRadius) {
+            bu.vx *= 0.98;
+            bu.vy *= 0.98;
+        }
         bu.x += bu.vx * dt;
         bu.y += bu.vy * dt;
         if (bu.x < -30 || bu.x > W + 30 || bu.y < -30 || bu.y > H + 30) {
@@ -220,16 +224,26 @@ function postBreakHooks(cx, cy, bl) {
             }
         }
     }
+    // 碎裂余波：击碎时概率对左右相邻方块造成 1 点伤害
+    if (p.shatterChance > 0 && Math.random() < p.shatterChance) {
+        for (const nb of blocksNear(cx, cy, bl.w * 1.2)) {
+            if (nb !== bl) damageBlock(nb, 1);
+        }
+    }
+    // 能量涌动：每击碎 5 个方块，下一击伤害 +1（每关重置）
+    if (p.surgeNeed > 0) {
+        p.surgeCounter = (p.surgeCounter || 0) + 1;
+        if (p.surgeCounter >= p.surgeNeed) {
+            p.surgeCounter = 0;
+            p.surgeBonus = (p.surgeBonus || 0) + 1;
+            spawnFloatingText(cx, cy - 20, `蓄力 +${p.surgeBonus}`, PAL.moss3);
+        }
+    }
 }
 
 const ghostActive = () => state.player.ghostTimer > 0;
 
 const onBallHits = (b, cx) => {
-    // 分裂之球
-    if (state.player.perks.split_ball && (b.blockHits % 6) === 0 && state.balls.length < MAX_BALLS) {
-        spawnExtraBalls(1);
-        spawnFloatingText(cx, b.y - 20, "分裂！", PAL.vio3);
-    }
 };
 
 // ─── 球的更新 ─────────────────────────────────────────────
@@ -240,7 +254,17 @@ const onBallHits = (b, cx) => {
 export function ballDamageOf(b) {
     const p = state.player;
     let dmg = p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
-    if (b && b.poisonTimer > 0) dmg = Math.max(1, Math.floor(dmg * 0.5));
+    if (b && b.poisonTimer > 0) dmg = Math.max(1, Math.floor(dmg * 0.75));
+    // 精准打击：空中累积伤害加成，击中方块后由 onBallHits 重置
+    if (b && p.precisionDmg > 0 && b.airFrames) {
+        const bonus = Math.floor(b.airFrames / 120) * p.precisionDmg;
+        dmg += Math.min(p.precisionMax, bonus);
+    }
+    // 能量涌动：下一击伤害加成，击中方块后由 onBallHits 消耗
+    if (b && p.surgeBonus > 0) {
+        dmg += p.surgeBonus;
+        p.surgeBonus = 0;
+    }
     return dmg;
 }
 
@@ -290,6 +314,9 @@ export function updateBalls() {
         const speedMul = (p.altarSpeedP || 1) * dt;
         b.x += b.vx * speedMul;
         b.y += b.vy * speedMul;
+
+        // 精准打击：追踪空中累积帧数
+        if (b.launched) b.airFrames = (b.airFrames || 0) + 1;
 
         // 毒雾：球进入毒区则中毒减伤。放在移动之后判定，避免用上一帧的位置。
         applyPoisonZones(b);
@@ -371,6 +398,7 @@ export function updateBalls() {
             b.vx = Math.cos(angle) * b.speed;
             b.vy = -Math.abs(Math.sin(angle) * b.speed);
             b.piercingLeft = p.maxPiercing;
+            b.airFrames = 0; // 精准打击：重置空中计数
 
             flashPaddle();
             spawnRing(b.x, b.y, PAL.arc2);
@@ -507,6 +535,11 @@ export function updateBalls() {
             const overlapY = b.radius + bl.h / 2 - Math.abs(b.y - (bl.y + bl.h / 2));
 
             const dmg = ballDamageOf(b);
+            // 弱点打击：对满血方块额外伤害
+            if (p.weakpointDmg > 0 && bl.hp >= bl.maxHp) {
+                bl.hp -= p.weakpointDmg;
+                spawnFloatingText(bl.x + bl.w / 2, bl.y - 10, "弱点！", PAL.moss3);
+            }
             bl.hp -= dmg;
 
             // 撞击方块时球加速
@@ -533,6 +566,15 @@ export function updateBalls() {
                 hitStop(2);
                 playBlockBreak();
                 addScore(bl.maxHp * 100);
+                // 每击碎 N 个方块生成一个新球，有分裂之球时 N=5 且取代默认 10 格机制
+                const splitInterval = state.player.perks.split_ball ? 5 : 10;
+                state.breakCounter = (state.breakCounter || 0) + 1;
+                if (state.breakCounter % splitInterval === 0 && state.balls.length < MAX_BALLS) {
+                    const nb = { ...b, isMain: false, trail: [] };
+                    nb.vy = -Math.abs(nb.vy);
+                    state.balls.push(nb);
+                    spawnFloatingText(cx, cy - 24, "分裂！", PAL.gold3);
+                }
                 blocks.splice(j, 1);
 
                 postBreakHooks(cx, cy, bl);
@@ -596,7 +638,7 @@ function applyPoisonZones(b) {
         if (Math.hypot(b.x - z.x, b.y - z.y) > z.r) continue;
         b.poisonTimer = POISON_DURATION;
         spawnParticles(b.x, b.y, PAL.vio2, 8);
-        spawnFloatingText(b.x, b.y - 18, "中毒！伤害减半", PAL.vio3);
+        spawnFloatingText(b.x, b.y - 18, "中毒！伤害降低", PAL.vio3);
         playBlockHit();
         break;
     }

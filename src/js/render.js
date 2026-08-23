@@ -68,16 +68,16 @@ export function drawPaddle() {
     // 硬黑轮廓
     pRect(x - PX, y - PX, w + PX * 2, h + PX * 2, PAL.ink0);
 
-    // ① 翼区底材：暗石。核心区随后覆盖在其上。
+    // ① 翼区底材：银灰色，与核心区拉开色相与明度双重对比，同时在地牢背景上更醒目。
     //
-    // 用 stone0 而非 stone1：实测 stone1 的亮度（65）与"默认"皮肤的 paddle1
-    // #633a86（72）和"绯红"皮肤 #8c2e38（67）几乎相同，翼区与核心区糊成一片。
-    // stone0 把翼区压到亮度 ~45，对四套皮肤都留出足够落差。
-    // 翼区不参与受击，视觉上要"退后"，所以不给高饱和色也不给呼吸光。
-    pRect(x, y, w, h, PAL.stone0);
-    pRect(x, y, w, PX, PAL.stone1);               // 顶部微高光（比核心区暗得多）
+    // 用 mist0 而非 stone0：stone0 亮度 ~45，与多数地板主题（ink2 ~ stone0）接近，
+    // 翼区在地牢背景下几乎隐形。mist0 亮度 ~75，比最亮的主题地板还亮一档，
+    // 无论在哪套主题下都能与背景区分。
+    // 翼区不参与受击，视觉上要"退后"，银灰的低饱和色相与核心区的高饱和色形成对比。
+    pRect(x, y, w, h, PAL.mist0);
+    pRect(x, y, w, PX, PAL.mist1);               // 顶部高光
     pRect(x, y + h - PX, w, PX, PAL.ink0);        // 底部阴影
-    pRect(x, y + PX, PX, h - PX * 2, PAL.stone1);
+    pRect(x, y + PX, PX, h - PX * 2, PAL.mist1);
     pRect(x + w - PX, y + PX, PX, h - PX * 2, PAL.ink0);
 
     // 翼区斜纹：低对比对角线，读作"这里是延展出的托板，不是本体"
@@ -403,9 +403,8 @@ export function render() {
     drawBossDangerZones();
     drawEnemyBullets();
 
-    // 暗角在 HUD 之前绘制，且只覆盖游戏区：
-    // 之前它画在最后且覆盖全屏，四角的网点会压掉 60~78% 的技能槽与生命值。
-    drawFieldVignette();
+    // 暗角：仅当获得「迷雾」诅咒时显示，左右两侧视线收缩
+    if ((state.player?.curseFog || 0) > 0) drawFieldVignette();
 
     drawUI();
     if (state.boss) drawBossBar();
@@ -433,29 +432,36 @@ export function render() {
     drawHurtOverlay();
 }
 
-// ─── 暗角 ─────────────────────────────────────────────────
-// 只作用于游戏区（顶栏之下、底栏之上），并且只压左右两侧边缘。
-// HUD 所在的四角完全不参与，保证技能槽/生命值/层数永远清晰可读。
+// ─── 暗角（仅「迷雾」诅咒生效时显示） ─────────────────────
+// 只作用于游戏区（顶栏之下、底栏之上），只压左右两侧边缘。
+// 迷雾诅咒越强，暗角起始越早、密度越大。
 let vignetteCache = null;
+let vignetteFog = -1;
 function drawFieldVignette() {
     const top = FIELD_TOP;
-    const bottom = SKILL_Y - PX * 2;      // 底栏之上留空
+    const bottom = SKILL_Y - PX * 2;
     const height = bottom - top;
     if (height <= 0) return;
 
-    if (!vignetteCache) {
-        vignetteCache = document.createElement("canvas");
-        vignetteCache.width = W;
-        vignetteCache.height = height;
+    const fog = state.player?.curseFog || 0;
+    if (!vignetteCache || vignetteFog !== fog) {
+        vignetteFog = fog;
+        if (!vignetteCache) {
+            vignetteCache = document.createElement("canvas");
+            vignetteCache.width = W;
+            vignetteCache.height = height;
+        }
         const c = vignetteCache.getContext("2d");
+        c.clearRect(0, 0, W, height);
         c.fillStyle = PAL.ink0;
-        // 只按水平距离衰减：越靠左右边缘越暗，纵向保持均匀，
-        // 这样不会在游戏区上下边界留下明显的暗弧。
         const cx = W / 2;
+        const startThresh = Math.max(0.40, 0.72 - fog * 0.28);
+        const range = Math.max(0.12, 0.28 - fog * 0.12);
+        const maxDensity = Math.min(0.92, 0.55 + fog * 0.37);
         for (let y = 0; y < height; y += PX) {
             for (let x = 0; x < W; x += PX) {
                 const d = Math.abs(x + PX / 2 - cx) / cx;
-                const density = Math.max(0, (d - 0.72) / 0.28) * 0.55;
+                const density = Math.max(0, (d - startThresh) / range) * maxDensity;
                 const th = (BAYER[(y / PX) & 3][(x / PX) & 3] + 0.5) / 16;
                 if (density > th) c.fillRect(x, y, PX, PX);
             }

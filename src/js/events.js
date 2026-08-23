@@ -17,7 +17,11 @@ function filterPool(rarity) {
         return (r.maxStacks ?? 1) > (p.perks[r.id] || 0);
     });
     const filtered = rarity ? pool.filter((r) => r.rarity === rarity) : pool;
-    return filtered.length > 0 ? filtered : pool;
+    if (filtered.length > 0) return filtered;
+    // 指定稀有度无可用奖励时，降级到全池（不含 boss 专属）
+    if (pool.length > 0) return pool;
+    // 全池也空了时，放宽条件：允许任何奖励（哪怕已满栈）
+    return REWARDS.filter((r) => !r.bossOnly);
 }
 
 function pickFrom(src) {

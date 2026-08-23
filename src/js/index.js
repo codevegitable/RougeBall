@@ -60,6 +60,8 @@ import {
     hitStatusBack,
     hitCodexNext,
     hitCodexPrev,
+    hitCodexItem,
+    hitCodexBackButton,
 } from "./ui.js";
 import { initAudio, toggleSound } from "./sound.js";
 import { spawnFloatingText } from "./fx.js";
@@ -168,6 +170,10 @@ window.addEventListener("keydown", (e) => {
     }
     if (e.key === "Escape") {
         if (state.gameState === STATE.CODEX) {
+            if (state.codexItem) {
+                state.codexItem = null;
+                return;
+            }
             if (state.codexFrom === "pause") {
                 state.gameState = STATE.PAUSED;
             } else {
@@ -271,6 +277,13 @@ canvas.addEventListener("click", (e) => {
 
     // 图鉴交互不受防抖限制
     if (state.gameState === STATE.CODEX) {
+        // 详情页的返回按钮
+        if (state.codexItem) {
+            if (hitCodexBackButton(pos.x, pos.y)) {
+                state.codexItem = null;
+            }
+            return;
+        }
         const tabIdx = hitCodexTab(pos.x, pos.y);
         if (tabIdx >= 0) {
             setCodexTab(tabIdx);
@@ -278,6 +291,10 @@ canvas.addEventListener("click", (e) => {
             setCodexPage(1);
         } else if (hitCodexPrev(pos.x, pos.y)) {
             setCodexPage(-1);
+        } else {
+            // 点击条目查看详情
+            const item = hitCodexItem(pos.x, pos.y);
+            if (item && !item.locked) state.codexItem = item;
         }
         return;
     }

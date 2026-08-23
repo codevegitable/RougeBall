@@ -45,12 +45,14 @@ export const STATE = {
 
 // ─── 奖励稀有度 ───────────────────────────────────────────
 export const RARITY = {
+    INITIAL: "initial",
     COMMON: "common",
     UNCOMMON: "uncommon",
     RARE: "rare",
 };
 
 export const RARITY_META = {
+    [RARITY.INITIAL]: { name: "初始", color: PAL.moss2, glow: PAL.moss3, weight: 100 },
     [RARITY.COMMON]: { name: "普通", color: PAL.mist0, glow: PAL.mist1, weight: 60 },
     [RARITY.UNCOMMON]: { name: "罕见", color: PAL.arc2, glow: PAL.arc3, weight: 30 },
     [RARITY.RARE]: { name: "稀有", color: PAL.gold2, glow: PAL.gold3, weight: 10 },
