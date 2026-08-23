@@ -12,14 +12,14 @@
 export const BOSS_CANDIDATES = {
     15: [
         {
-            name: "铁壁执行者", color: "#5aa7ff", hp: 112, bulletSpeed: 1.45,
+            name: "铁壁执行者", color: "#5aa7ff", hp: 90, bulletSpeed: 1.45,
             bossType: "executor", tier: 0,
             skills: ["charge", "slam"],
             patterns: ["fan", "ring"],
             desc: "近战冲撞型，正面减伤，诱导撞墙后输出",
         },
         {
-            name: "回旋机兵", color: "#57d39a", hp: 118, bulletSpeed: 1.35,
+            name: "回旋机兵", color: "#57d39a", hp: 90, bulletSpeed: 1.35,
             bossType: "executor", tier: 0,
             skills: ["charge", "slam"],
             patterns: ["spiral", "fan"],
@@ -28,14 +28,14 @@ export const BOSS_CANDIDATES = {
     ],
     30: [
         {
-            name: "腐化母体", color: "#b26bff", hp: 240, bulletSpeed: 1.60,
+            name: "腐化母体", color: "#b26bff", hp: 210, bulletSpeed: 1.60,
             bossType: "mother", tier: 1,
             skills: ["summon", "slam"],
             patterns: ["ring", "split"],
             desc: "召唤腐化植物，治疗花与毒花并存",
         },
         {
-            name: "剧毒核心", color: "#e05a5a", hp: 252, bulletSpeed: 1.55,
+            name: "剧毒核心", color: "#e05a5a", hp: 210, bulletSpeed: 1.55,
             bossType: "mother", tier: 1,
             skills: ["summon", "slam"],
             patterns: ["wave", "ring"],
@@ -44,30 +44,30 @@ export const BOSS_CANDIDATES = {
     ],
     45: [
         {
-            name: "机械蜂巢", color: "#ff5a8c", hp: 412, bulletSpeed: 1.75,
+            name: "机械蜂巢", color: "#ff5a8c", hp: 392, bulletSpeed: 1.75,
             bossType: "hive", tier: 2,
             skills: ["summon"],
             patterns: ["fan", "split"],
-            desc: "部署无人机：修复/护盾/自爆",
+            desc: "三阶段：纯弹幕 → 部署无人机 → 主炮激光（有预警，可打断）",
         },
         {
-            name: "蜂群母舰", color: "#e8a33d", hp: 430, bulletSpeed: 1.70,
+            name: "蜂群母舰", color: "#e8a33d", hp: 390, bulletSpeed: 1.70,
             bossType: "hive", tier: 2,
             skills: ["summon"],
             patterns: ["spiral", "homing"],
-            desc: "部署无人机：修复/护盾/自爆",
+            desc: "三阶段：纯弹幕 → 部署无人机 → 主炮激光（有预警，可打断）",
         },
     ],
     50: [
         {
-            name: "诅咒司祭", color: "#ff3333", hp: 525, bulletSpeed: 1.90,
+            name: "诅咒司祭", color: "#ff3333", hp: 485, bulletSpeed: 1.90,
             bossType: "priest", tier: 3,
             skills: ["altar", "slam", "charge"],
             patterns: ["fan", "homing", "split"],
             desc: "召唤诅咒祭坛，摧毁祭坛解除诅咒",
         },
         {
-            name: "虚空司祭", color: "#8f5fe8", hp: 548, bulletSpeed: 1.85,
+            name: "虚空司祭", color: "#8f5fe8", hp: 508, bulletSpeed: 1.85,
             bossType: "priest", tier: 3,
             skills: ["altar", "slam", "charge"],
             patterns: ["spiral", "wave", "ring"],

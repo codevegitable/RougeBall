@@ -22,6 +22,16 @@ function bossHitRect() {
     return { x: p.x + extra / 2, w: base, y: p.y, h: p.height };
 }
 
+// 蜂巢专用底墙：挡板受击带的下沿（挡板 y=560 + 板高 14 = 574）。
+//
+// 取这条线而不是画布底 H：原判定 y>H+30=630 让残弹继续飘过挡板再穿过技能栏，
+// 而 P2 玩家正需要贴着底部横向甩开自爆无人机——那些"已经躲过"的弹仍留在视野里干扰读图。
+// 574 同时正好是 bossHitRect 的判定下界，因此按"弹丸上沿越过底墙"剔除时，
+// 被剔除的弹在几何上必然已经不满足命中条件，不可能吃掉一次本该命中的判定。
+function hiveFloorY() {
+    return state.paddle.y + state.paddle.height;
+}
+
 // tier 威胁权重：把各项弹幕/召唤强度沿 tier 的增长放缓。
 //
 // 原实现所有项都按 tier 线性缩放（弹数 3+t、环形 6+2t、小怪血量 20+10t …），
@@ -34,6 +44,68 @@ function bossHitRect() {
 export function tierWeight(tier) {
     return Math.pow(Math.max(0, tier), 0.75);
 }
+
+// ═══ 机械蜂巢（tier 2）三阶段参数 ═══
+//
+// 改版起因：原实现弹幕过密，但根因不在弹幕参数，而在召唤物无上限——
+// executeSummon 在 active 阶段每帧调用一次 spawnMinionForType（timer<8 共约 8 次），
+// 而 hive 技能池只有 ["summon"]、周期仅 101 帧，minions 又没有任何数量上限。
+// 实测 10s 后场上约 28 只（其中 turret 16 只 → 12.6 发/秒），20s 后 25 发/秒且不收敛。
+// 闲时弹幕本身只有 1.79 发/秒，并不是主要来源。
+//
+// 数值全部由难度预算反解，而非直接填写：
+//   HP 412；damageBoss 有 hitCooldown=25 帧 → 玩家最多 2.4 次/秒；
+//   lv45 时 bossDefeated=2 → rewardScale=0.76，典型 ballDamage≈5
+//   ⇒ 玩家 DPS ≈ 12/秒，全程理论最短 34s。
+//
+// 以下为逐帧仿真实测（12 DPS、i 帧照常、理想走位的玩家，跑完整场）：
+//   全程 37.9s（机械蜂巢）/ 39.6s（蜂群母舰），与 34s 的理论下限相符；
+//   阶段时长 P1 11.7s / P2 17.9s / P3 8.3s；
+//   同屏弹量峰值 P1 17~19 发、P2 10 发、P3 0 发（改版前 P1 约 55 发）；
+//   召唤物恒定 3 只（改版前 20s 后仍在涨）。
+// P2 比预算长是因为护盾无人机的 50% 减伤——那是它该有的效果，不是失控。
+const HIVE_PHASE_AT = [0.65, 0.30]; // HP 比例低于此值时进入下一阶段
+
+// P1：只弹幕。周期 90 帧 × 4 发 → 2.67 发/秒，同屏约 12 发（原实现同屏约 55 发）
+const HIVE_P1 = { volleyMin: 90, volleyRand: 30, fanCount: 4 };
+
+// P2：召唤为主，弹幕退居次要。周期 135 帧 → 2.13 发/秒，总密度低于 P1。
+// 威胁由召唤物承担，不靠加弹——这是"弹幕不宜过密"的落点。
+const HIVE_P2 = {
+    volleyMin: 135, volleyRand: 45, fanCount: 3,
+    respawnDelay: 300,  // 召唤物死亡后延迟 5s 补位，而非立即
+};
+
+// 每型同屏限 1（总计 3）。原实现无上限，是弹幕过密的真正来源。
+const HIVE_MINION_KINDS = ["turret", "shield", "bomber"];
+
+// P3：只激光。周期 130 帧 = 2.2s（预警 55 + 开火 40 + 恢复 35），每波 2 道。
+const LASER = {
+    warn: 55,        // 预警帧数
+    fire: 40,        // 开火帧数
+    recover: 35,     // 恢复帧数（易伤窗口）
+    halfW: 26,       // 束半宽 → 全宽 52px = 13 个美术像素
+    warnHalfW: 3,    // 预警细线半宽
+    beams: 2,        // 每波道数
+    // 双束间距按"挡板平面上的落点距离"定义，而不是张角：
+    // 安全走廊需容纳 挡板110 + 两侧各半束宽26×2=52 + 余量30 = 192px。
+    // 在纵向射程 560-130=430px 上这等价于 atan(192/430)=24°（取整 25°），
+    // 但直接写角度会在 Boss 漂到场边时退化成近水平的束——它在射到挡板平面前
+    // 就出界了，"永远存在安全区"的前提反而失效。按落点定则几何上恒成立。
+    gap: 192,
+    edgePad: 60,     // 落点夹持，避免光束射到场外形同虚设
+    // 打断做成"每次命中削掉一道束"，而不是"命中 N 次取消整波"。
+    //
+    // 阈值制在这里必然是断崖：球从挡板到 Boss 单程 430px÷5.5 = 78 帧、往返 156 帧，
+    // 而预警窗只有 55 帧。实测阈值 2 时 1~3 球的打断率是 0%/0%/4%，到 5 球突然 93%；
+    // 阈值 1 则 1 球 35%、2 球就 94%，P3 直接失去威胁。两种取值都没有中间地带。
+    // 逐束削减让收益与投入成正比：单球偶尔削掉一道（安全区变宽），
+    // 多球才能削光取消整波，且多球本来就更难兼顾走位，不会白拿。
+    interruptRecover: 100, // 削光整波的奖励：长易伤窗口（常规恢复只有 35）
+};
+
+// 阶段切换时的喘息窗口：清场 + 易伤，让玩家有时间读懂"打法变了"
+const HIVE_PHASE_BREATHER = 90;
 
 export function createBoss(level) {
     const candidates = BOSS_CANDIDATES[level];
@@ -67,13 +139,23 @@ t: 0,
         chargeProgress: 0, // 0-100
         interrupted: false,
         // 阶段
-        phase: 0, // 0=第一, 1=第二(半血后)
+        // 普通 Boss：0=第一, 1=第二(半血后)
+        // 机械蜂巢（tier 2）：0=纯弹幕, 1=召唤, 2=激光，见 HIVE_PHASE_AT
+        phase: 0,
         // 弹幕
         volleyTimer: 0,
         volleyIdx: 0,
-        spiralFrames: 0, spiralAngle: 0,
+        spiralFrames: 0, spiralAngle: 0, spiralTick: 0,
         homingQueue: 0, homingTick: 0,
         dash: null, dashCd: 0,
+        // 激光（蜂巢三阶段专属）
+        lasers: [],        // 当前波次的束 {ang, x0, y0, hit}，空数组=闲置
+        laserPhase: "",    // "warn" | "fire" | ""
+        laserPhaseTimer: 0,
+        laserTimer: 0,     // 距下一波的倒计时（含恢复期，保证波次周期恒定）
+        laserHits: 0, // 本波预警期内已被削掉的束数（仅用于显示，机制见 tryInterruptLaser）
+        // 召唤物补位冷却：按类型记名，实现"每型同屏限 1 + 延迟补位"
+        minionRespawn: {},
     };
     state.bossBullets = [];
     state.bossDangerZones = [];
@@ -94,9 +176,26 @@ export function updateBoss() {
     const movingAction = boss.action &&
         ((boss.action.type === "charge" && boss.action.phase === "active") ||
          (boss.action.type === "slam" && boss.action.phase === "active"));
-    if (!movingAction) {
+    // 蜂巢激光波期间必须定住：Boss 的常态飘移是 ±140px 正弦，最大 1.68px/帧，
+    // 40 帧开火期就能把束横移 67px——那正是"扫射"，会把已经躲对位置的玩家扫回去。
+    // 定住 Boss 同时保证预警细线始终连在炮口上，玩家读得出光是从哪儿来的。
+    const laserLocked = boss.bossType === "hive" && (boss.laserPhase === "warn" || boss.laserPhase === "fire");
+    if (!movingAction && !laserLocked) {
         boss.x = W / 2 + Math.sin(boss.t * 0.012) * 140;
         boss.y = 130 + Math.sin(boss.t * 0.023) * 20;
+    }
+
+    // 机械蜂巢：三阶段各有独立节奏，不走通用技能状态机
+    // （P1 只弹幕 / P2 只召唤 / P3 只激光，用技能轮换反而无法保证"某阶段不做某事"）
+    if (boss.bossType === "hive") {
+        updateHive(boss, dt);
+        updateMinions(boss, dt);
+        // 蜂巢不生成祭坛，但仍要调用——该函数同时负责把 altarDmgP/SpeedP/CdP
+        // 复位成默认值，跳过它会让上一场 Boss 的诅咒残留在玩家身上。
+        altarCurseEffects();
+        updateBossBullets();
+        updateDangerZones();
+        return;
     }
 
     // 恢复阶段（易伤窗口）
@@ -139,6 +238,318 @@ export function updateBoss() {
     altarCurseEffects();
     updateBossBullets();
     updateDangerZones();
+}
+
+// ═══ 机械蜂巢：三阶段驱动 ═══════════════════════════════════
+//
+// 与通用技能状态机并行存在，而不是复用它：通用机是"从技能池里轮换"，
+// 无法表达"P1 绝不召唤 / P3 绝不发弹"这类硬约束——只要技能在池里就迟早会抽到。
+// 三阶段各自是一条固定节奏线，读起来也更接近玩家实际感知的"打法换了"。
+function updateHive(boss, dt) {
+    hivePhaseCheck(boss);
+
+    // 阶段切换喘息：清场 + 易伤，期间不做任何攻击
+    if (boss.recoverTimer > 0) {
+        boss.recoverTimer -= dt;
+        boss.vulnerable = true;
+        if (boss.recoverTimer <= 0) boss.vulnerable = false;
+        return;
+    }
+
+    if (boss.phase === 0) {
+        // P1：只弹幕。周期 90~120 帧，fan/split 交替。
+        fireHiveVolley(boss, dt, HIVE_P1);
+    } else if (boss.phase === 1) {
+        // P2：召唤为主 + 低频弹幕（总弹密度低于 P1）
+        hiveSummonTick(boss, dt);
+        fireHiveVolley(boss, dt, HIVE_P2);
+    } else {
+        // P3：只激光，一发子弹都不打
+        updateLasers(boss, dt);
+    }
+}
+
+// 阶段推进：按 HP 比例跨过 HIVE_PHASE_AT 的阈值就进阶。
+// 用 while 而非 if——一次超额伤害（易伤 ×1.5 + 穿透）足以跨过两个阈值，
+// 用 if 会让 Boss 卡在 P2 直到再挨一下，表现为"血量早就见底了却还在召唤"。
+function hivePhaseCheck(boss) {
+    const ratio = boss.hp / boss.maxHp;
+    while (boss.phase < HIVE_PHASE_AT.length && ratio < HIVE_PHASE_AT[boss.phase]) {
+        boss.phase++;
+        onHivePhaseEnter(boss);
+    }
+}
+
+function onHivePhaseEnter(boss) {
+    // 清场：残留的旧阶段威胁不该跨进新阶段，否则 P3"不发弹幕"会被上一阶段的
+    // 存量子弹和炮台破坏，玩家读不出规则已经变了。
+    state.bossBullets.length = 0;
+    for (const m of boss.minions) spawnParticles(m.x, m.y, m.color || PAL.bone1, 10);
+    boss.minions.length = 0;
+    boss.minionRespawn = {};
+    boss.lasers.length = 0;
+    boss.laserPhase = "";
+    boss.laserHits = 0;
+    // 进入新阶段先给一次易伤喘息，让玩家有时间读懂新的攻击方式
+    boss.recoverTimer = HIVE_PHASE_BREATHER;
+    boss.vulnerable = true;
+    // 第一波不要贴着喘息窗结束就来
+    boss.volleyTimer = 60;
+    boss.laserTimer = 40;
+    const label = boss.phase === 1 ? "第二阶段：蜂群部署！" : "第三阶段：主炮充能！";
+    spawnFloatingText(boss.x, boss.y - 60, label, boss.color);
+    screenShake(8, 200);
+    playBossShoot();
+}
+
+// ─── P1 / P2 弹幕 ─────────────────────────────────────────
+// 不复用 fireVolley：那条路径带着 tier===2 的 ×1.4 补丁和固定的 90+rand*60 周期，
+// 而三阶段需要每阶段各自的节奏参数。
+function fireHiveVolley(boss, dt, cfg) {
+    // spiral / homing 是持续性弹幕：它们在自己的活跃期内自行发射。
+    // volleyTimer 仍然照常倒数——否则持续期会白白吃掉下一波的冷却，
+    // 实测让"蜂群母舰"(patterns 全是这两项) 的弹量掉到同僚的一半。
+    const sustained = tickSustainedPatterns(boss, dt);
+
+    boss.volleyTimer -= dt;
+    if (boss.volleyTimer > 0 || sustained) return;
+    boss.volleyTimer = cfg.volleyMin + Math.random() * cfg.volleyRand;
+    const pattern = boss.patterns[boss.volleyIdx % boss.patterns.length];
+    boss.volleyIdx++;
+    fireHivePattern(boss, pattern, cfg);
+}
+
+function fireHivePattern(boss, pattern, cfg) {
+    const spd = boss.bulletSpeed;
+    switch (pattern) {
+        case "fan": aimedFan(boss, spd, cfg.fanCount); break;
+        case "split": aimedFan(boss, spd, Math.max(2, cfg.fanCount - 1), { splitAt: 46 }); break;
+        case "ring": ringBurst(boss, spd * 0.85, cfg.fanCount + 2); break;
+        case "wave": aimedFan(boss, spd, cfg.fanCount, { wave: true }); break;
+        // 下面两项在此前的实现里只写字段、无人消费，等于哑火（见 tickSustainedPatterns）。
+        // 发数与 fan 对齐：spiral 每 9 帧 1 发、homing 每 14 帧 1 发，
+        // 都产出 cfg.fanCount 发，四种 pattern 的每波弹量因此一致。
+        case "homing": boss.homingQueue = cfg.fanCount; boss.homingTick = 0; break;
+        case "spiral": boss.spiralFrames = cfg.fanCount * 9; boss.spiralTick = 0; boss.spiralAngle = Math.random() * Math.PI * 2; break;
+        default: aimedFan(boss, spd, cfg.fanCount); break;
+    }
+    playBossShoot();
+}
+
+// spiral / homing 的实际发射逻辑。
+//
+// 这两个 pattern 原本只在 fireVolleySingle 里设置 spiralFrames / homingQueue，
+// 却没有任何代码读取它们——"蜂群母舰"的 patterns 恰好是 ["spiral","homing"]，
+// 于是它的闲时弹幕实测为 0 发。补上消费方后两艘 tier 2 Boss 的弹幕量才对齐。
+// 返回 true 表示本帧正处在持续弹幕中，不应再排新波次。
+function tickSustainedPatterns(boss, dt) {
+    let busy = false;
+    if (boss.spiralFrames > 0) {
+        busy = true;
+        boss.spiralFrames -= dt;
+        boss.spiralTick -= dt;
+        if (boss.spiralTick <= 0) {
+            boss.spiralTick = 9; // 每 9 帧一发 → 与 fan 的每波发数同量级
+            boss.spiralAngle += 0.62;
+            fireBullet(boss, Math.cos(boss.spiralAngle), Math.sin(boss.spiralAngle), boss.bulletSpeed * 0.9, 6);
+        }
+    }
+    if (boss.homingQueue > 0) {
+        busy = true;
+        boss.homingTick -= dt;
+        if (boss.homingTick <= 0) {
+            boss.homingTick = 14;
+            boss.homingQueue--;
+            aimedFan(boss, boss.bulletSpeed * 0.8, 1, { homing: true });
+        }
+    }
+    return busy;
+}
+
+// ─── P2 召唤：每型同屏限 1 ─────────────────────────────────
+//
+// 这是"弹幕过密"的真正修复点。原实现 executeSummon 在 active 期每帧调用一次
+// spawnMinionForType 且 minions 无上限，10s 后场上约 28 只、turret 贡献 12.6 发/秒。
+// 改为按类型定额：三型各恒定 1 只，死亡后延迟 respawnDelay 才补位。
+// 数量确定后 P2 的弹幕产出也随之确定（turret 1 只 → 0.60 发/秒），可以进预算表。
+function hiveSummonTick(boss, dt) {
+    for (const kind of HIVE_MINION_KINDS) {
+        if (boss.minions.some(m => m.type === kind)) {
+            // 存活期间持续把冷却压满，这样计时才是"从死亡那刻起算 5s"。
+            // 若只在生成时设一次，一只活了 4s 才被打掉的炮台会在 1s 后就补位。
+            boss.minionRespawn[kind] = HIVE_P2.respawnDelay;
+            continue;
+        }
+        const cd = boss.minionRespawn[kind] || 0;
+        if (cd > 0) {
+            boss.minionRespawn[kind] = cd - dt;
+            continue;
+        }
+        spawnHiveMinion(boss, kind);
+    }
+}
+
+function spawnHiveMinion(boss, kind) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 120 + Math.random() * 60;
+    const mx = Math.max(40, Math.min(W - 40, boss.x + Math.cos(angle) * dist));
+    const my = Math.max(80, Math.min(H - 60, boss.y + Math.sin(angle) * dist));
+    const minionHp = Math.round(18 + tierWeight(boss.tier) * 8);
+    const colors = { turret: PAL.ember2, shield: PAL.gold3, bomber: PAL.blood2 };
+    const names = { turret: "炮台", shield: "护盾", bomber: "自爆" };
+    boss.minions.push({
+        x: mx, y: my, r: 14, hp: minionHp, maxHp: minionHp, type: kind,
+        healTimer: 0, poisonTimer: 0,
+        // 固定 100 帧而非 60+rand*30：数量已定额，射速再随机就无法做密度预算
+        shootTimer: kind === "turret" ? 100 : 0,
+        fireInterval: kind === "turret" ? 100 : 0,
+        // bomber 的 seekTimer 是自毁计时，不是补位冷却；1.2 的速度见 updateMinions 注释
+        seekTimer: kind === "bomber" ? 420 : 0,
+        speed: kind === "bomber" ? 1.2 : 0,
+        flash: 0, angle: Math.random() * Math.PI * 2, color: colors[kind],
+    });
+    spawnFloatingText(mx, my - 20, `部署：${names[kind]}`, colors[kind]);
+    playBossShoot();
+}
+
+// ─── P3 激光 ──────────────────────────────────────────────
+//
+// 波次：预警 55 → 开火 40 → 恢复 35（周期 130 帧）。
+// 预警期锁定挡板当前中心，之后不再追踪——玩家能靠"看见细线 → 走开"稳定应对，
+// 追踪式激光则会退化成纯运气。
+function updateLasers(boss, dt) {
+    if (boss.laserPhase === "warn") {
+        boss.laserPhaseTimer -= dt;
+        if (boss.laserPhaseTimer <= 0) {
+            boss.laserPhase = "fire";
+            boss.laserPhaseTimer = LASER.fire;
+            boss.laserHits = 0;
+            screenShake(7, 180);
+            playBossShoot();
+        }
+        return;
+    }
+
+    if (boss.laserPhase === "fire") {
+        boss.laserPhaseTimer -= dt;
+        // 束的起点与方向在预警时就固定了，开火期一律不动——Boss 的常态飘移
+        // 已由 updateBoss 的 laserLocked 冻结，这里也不重算，"不扫射"才成立。
+        checkLaserHit(boss);
+        if (boss.laserPhaseTimer <= 0) {
+            boss.lasers.length = 0;
+            boss.laserPhase = "";
+            // 恢复期＝易伤窗口：激光打完必然有一段破绽，这是 P3 的输出窗口。
+            // 恢复结束即接下一波，故 laserTimer 归零——周期恰好 55+40+35=130 帧。
+            boss.recoverTimer = LASER.recover;
+            boss.vulnerable = true;
+            boss.laserTimer = 0;
+        }
+        return;
+    }
+
+    // 闲置：等下一波。正常节奏下 laserTimer 已为 0，只有进入 P3 的首波
+    // 和被打断后的惩罚期才会在这里真正等待。
+    boss.laserTimer -= dt;
+    if (boss.laserTimer <= 0) beginLaserWave(boss);
+}
+
+function beginLaserWave(boss) {
+    boss.lasers.length = 0;
+    boss.laserPhase = "warn";
+    boss.laserPhaseTimer = LASER.warn;
+    boss.laserHits = 0;
+
+    // 第一道锁死挡板当前中心，第二道偏移 LASER.gap。
+    //
+    // 关键是"锁中心"而不是"左右夹住中心"：夹住的话原地不动永远安全，
+    // 激光就退化成布景。锁中心则必须移动，而 gap 保证移动一定有目的地——
+    // 背离第二道的方向上必然存在安全区（见 LASER.gap 的推导）。
+    const py = state.paddle.y;
+    const aim = state.paddle.x + state.paddle.width / 2;
+    // 第二道朝较近的那面墙偏，把玩家往场地中央赶；否则玩家会被逼进墙角，
+    // 那里没有第二次躲避的余地。
+    const side = aim < W / 2 ? -1 : 1;
+    const lo = LASER.edgePad, hi = W - LASER.edgePad;
+    for (let i = 0; i < LASER.beams; i++) {
+        const tx = Math.max(lo, Math.min(hi, aim + side * i * LASER.gap));
+        boss.lasers.push({
+            x0: boss.x, y0: boss.y,
+            ang: Math.atan2(py - boss.y, tx - boss.x),
+            hit: false, // 每束每波最多判定一次
+        });
+    }
+    spawnFloatingText(boss.x, boss.y - 60, "主炮锁定！", PAL.blood3);
+    playBossShoot();
+}
+
+// 点到射线的垂距。射线是单向的（t<0 即在 Boss 身后），所以要先夹 t≥0，
+// 否则挡板站在 Boss 正上方时会被"背后的光束"判定命中。
+function distToBeam(beam, px, py) {
+    const dx = Math.cos(beam.ang), dy = Math.sin(beam.ang);
+    const t = Math.max(0, (px - beam.x0) * dx + (py - beam.y0) * dy);
+    return Math.hypot(beam.x0 + dx * t - px, beam.y0 + dy * t - py);
+}
+
+function checkLaserHit(boss) {
+    const hr = bossHitRect();
+    // 取受击区中心与左右端点三点检测：只测中心会让"半个板在束里"漏判，
+    // 而完整的矩形-带状相交在这个精度需求下不值当。
+    const cy = hr.y + hr.h / 2;
+    const probes = [hr.x, hr.x + hr.w / 2, hr.x + hr.w];
+    for (const beam of boss.lasers) {
+        if (beam.hit) continue;
+        if (probes.some(px => distToBeam(beam, px, cy) <= LASER.halfW)) {
+            beam.hit = true;
+            onLaserHit(beam);
+        }
+    }
+}
+
+// 命中惩罚与弹幕一致（1 命 + 90 帧无敌），并复用同一条护盾/反弹/格挡判定链——
+// 新造一套会让玩家已有的防御类奖励在 P3 突然失效。
+function onLaserHit(beam) {
+    const pl = state.player;
+    const px = state.paddle.x + state.paddle.width / 2;
+    const py = state.paddle.y;
+    if (pl.shieldTimer > 0) { spawnRing(px, py, PAL.arc3); playWallHit(); return; }
+    if (state.invulnTimer > 0) return;
+    if (pl.bounceShield > 0 && Math.random() < pl.bounceShield) { spawnRing(px, py, PAL.gold3); playWallHit(); return; }
+    if (Math.random() < pl.bossResist) { spawnFloatingText(px, py - 24, "格挡！", PAL.moss3); playWallHit(); return; }
+    state.invulnTimer = 90;
+    playerHurt();
+    screenShake(11, 260);
+    playPlayerHit();
+    spawnParticles(px, py, PAL.blood3, 14);
+    loseLife(1);
+}
+
+// 预警期内每次命中 Boss 削掉一道束；削光则取消本波并进入长易伤。由 damageBoss 调用。
+//
+// 削哪一道决定了这个机制的手感。试过"削离挡板最近的那道"——实测直接送安全：
+// 三球节奏下站着不动都零掉命，因为被削掉的永远正是瞄着自己的那道，
+// 而 Boss 战里球本来就在挡板与 Boss 之间往返，这次命中等于白拿。
+// 改成从最外侧往里削：锁定挡板中心的那道（索引 0）永远会打出来，玩家仍必须走位；
+// 被削掉的是封住退路的侧翼束，安全区因此变宽——奖励真实，但不替玩家把活干完。
+function tryInterruptLaser(boss) {
+    if (boss.laserPhase !== "warn" || boss.lasers.length === 0) return;
+    // 索引 0 是主瞄束，最后一道是最外侧的侧翼束
+    if (boss.lasers.length === 1) {
+        // 只剩主瞄束：再命中一次才能整波取消，代价与收益都最大
+        boss.lasers.length = 0;
+        boss.laserPhase = "";
+        boss.laserHits = 0;
+        boss.laserTimer = LASER.interruptRecover;
+        boss.recoverTimer = LASER.interruptRecover;
+        boss.vulnerable = true;
+        spawnFloatingText(boss.x, boss.y - 50, "主炮过载！", PAL.moss3);
+        screenShake(6, 140);
+        return;
+    }
+    const dead = boss.lasers.pop();
+    boss.laserHits++;
+    spawnParticles(dead.x0 + Math.cos(dead.ang) * 80, dead.y0 + Math.sin(dead.ang) * 80, PAL.arc3, 12);
+    spawnFloatingText(boss.x, boss.y - 46, "击毁一门副炮！", PAL.arc3);
+    playWallHit();
 }
 
 // ─── 技能选择 ─────────────────────────────────────────────
@@ -364,6 +775,18 @@ function updateMinions(boss, dt) {
     for (let i = boss.minions.length - 1; i >= 0; i--) {
         const m = boss.minions[i];
         m.flash = Math.max(0, m.flash - 0.08 * dt);
+
+        // 蜂巢召唤物触底即消。判定取"上沿越过底墙"（m.y - m.r > floor）而非"下沿触碰"：
+        // 自爆无人机的目标就是挡板平面，下沿碰底墙的那一刻恰好是它该引爆的一刻，
+        // 用下沿判定会在引爆前一帧把它删掉，等于废掉这一型召唤物。
+        // 这里不走 m.hp<=0 分支，因此不触发"召唤物死亡反噬"的 -10 HP——
+        // 它是自己飞出去的，不是玩家打掉的。
+        if (boss.bossType === "hive" && m.y - m.r > hiveFloorY()) {
+            spawnParticles(m.x, hiveFloorY(), m.color || PAL.moss3, 8);
+            boss.minions.splice(i, 1);
+            continue;
+        }
+
         if (m.type === "healer") {
             m.healTimer -= dt;
             if (m.healTimer <= 0) {
@@ -393,8 +816,12 @@ function updateMinions(boss, dt) {
             const dx = state.paddle.x + state.paddle.width / 2 - m.x;
             const dy = state.paddle.y - m.y;
             const len = Math.hypot(dx, dy) || 1;
-            m.x += (dx / len) * 0.6 * dt;
-            m.y += (dy / len) * 0.6 * dt;
+            // 速度按"必须够得着挡板"反解：最坏情况纵向 560-80=480px，
+            // 在 70% 寿命内走完 → 480/(0.7×420)=1.63，取 1.2 留出被击杀的窗口。
+            // 母体的藤蔓型沿用原来的 0.6，不受影响。
+            const spd = m.speed || 0.6;
+            m.x += (dx / len) * spd * dt;
+            m.y += (dy / len) * spd * dt;
             if (m.seekTimer <= 0 || len < 20) {
                 state.boss.minions.splice(i, 1);
                 if (len < 80) {
@@ -406,11 +833,23 @@ function updateMinions(boss, dt) {
                 continue;
             }
         }
+        // 护盾无人机：不攻击，靠拢 Boss 提供减伤（减伤逻辑在 damageBoss）。
+        // 让它贴着 Boss 而不是原地漂，是为了把"先拆盾还是先打本体"这个选择
+        // 摆到同一片区域里——否则玩家可以两边分开处理，取舍就消失了。
+        if (m.type === "shield") {
+            m.angle += 0.02 * dt;
+            const ox = boss.x + Math.cos(m.angle) * (boss.r + 34);
+            const oy = boss.y + Math.sin(m.angle) * (boss.r + 34);
+            m.x += (ox - m.x) * 0.04 * dt;
+            m.y += (oy - m.y) * 0.04 * dt;
+        }
         // 弹幕无人机：定期发射单发子弹
         if (m.type === "turret") {
             m.shootTimer -= dt;
             if (m.shootTimer <= 0) {
-                m.shootTimer = 60 + Math.random() * 30;
+                // 蜂巢的炮台数量已定额（每型 1 只），射速再随机就无法做密度预算，
+                // 故取固定 100 帧（0.60 发/秒）。其他 Boss 保留原来的随机区间。
+                m.shootTimer = m.fireInterval || (60 + Math.random() * 30);
                 const px = state.paddle.x + state.paddle.width / 2;
                 const py = state.paddle.y;
                 const ang = Math.atan2(py - m.y, px - m.x);
@@ -707,6 +1146,9 @@ export function damageBoss(dmg, silent = false) {
     if (boss.action && boss.action.type === "ultimate" && boss.action.phase === "warn") {
         if (Math.random() < 0.3) interruptBossUltimate();
     }
+    // 蜂巢 P3：预警期打够次数可打断本波激光（确定性，非概率——
+    // 玩家要为此主动把球送上去，不该再赌一次骰子）
+    if (boss.bossType === "hive" && boss.phase === 2) tryInterruptLaser(boss);
     if (boss.hp <= 0) defeatBoss();
 }
 
@@ -729,6 +1171,8 @@ function updateBossBullets() {
     if (bullets.length > 150) bullets.splice(0, bullets.length - 150);
     const px = state.paddle.x + state.paddle.width / 2;
     const py = state.paddle.y;
+    const isHive = state.boss && state.boss.bossType === "hive";
+    const floorY = hiveFloorY();
 
     for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
@@ -769,6 +1213,14 @@ function updateBossBullets() {
         }
 
         if (b.x < -30 || b.x > W + 30 || b.y < -30 || b.y > H + 30) { bullets.splice(i, 1); continue; }
+
+        // 蜂巢：触底即消。判定用弹丸上沿（y - r）越过底墙，
+        // 因此剔除时该弹已不可能满足下面的命中条件，不会吞掉一次本该生效的判定。
+        if (isHive && b.y - b.r > floorY) {
+            bullets.splice(i, 1);
+            spawnParticles(b.x, floorY, bulletColor(b), 5);
+            continue;
+        }
 
         const p = state.paddle;
         const hr = bossHitRect();
@@ -1040,6 +1492,57 @@ export function drawBossBullets() {
             // 两侧翼点：走蛇形
             pRectRaw(b.x - r + PX, b.y - PX / 2, PX, PX, k.core);
             pRectRaw(b.x + r - PX * 2, b.y - PX / 2, PX, PX, k.core);
+        }
+    }
+}
+
+// ─── 蜂巢主炮激光 ─────────────────────────────────────────
+//
+// 必须是独立导出的世界坐标绘制函数，不能塞进 drawBoss——后者内部
+// ctx.translate(boss.x, boss.y) 建立了 Boss 局部坐标系，激光会整体偏移。
+//
+// 预警与开火的视觉差刻意做到极大（细线 ↔ 13 格宽的实心束 + 震屏）：
+// 玩家只有 55 帧反应时间，预警必须"一眼看见"，但又不能粗到看着像已经开火了。
+export function drawBossLasers() {
+    const boss = state.boss;
+    if (!boss || !boss.lasers || boss.lasers.length === 0) return;
+    const warning = boss.laserPhase === "warn";
+    // 束长取对角线以上，保证任何角度都射到场外，不会在半空中断掉
+    const LEN = Math.hypot(W, H) + 120;
+
+    for (const beam of boss.lasers) {
+        ctx.save();
+        ctx.translate(beam.x0, beam.y0);
+        ctx.rotate(beam.ang);
+
+        if (warning) {
+            // 预警：细红线 + 沿线奔向落点的行进光点，暗示"这条线上马上有东西"
+            const hw = LASER.warnHalfW;
+            pRectRaw(0, -hw, LEN, hw * 2, PAL.blood1);
+            pRectRaw(0, -PX / 2, LEN, PX / 2, PAL.blood3);
+            // 充能刻度：每 PX*10 一格，越接近开火跑得越快
+            const prog = 1 - boss.laserPhaseTimer / LASER.warn;
+            const step = PX * 10;
+            const off = (boss.t * (2 + prog * 6)) % step;
+            for (let d = off; d < LEN; d += step) {
+                pRectRaw(d, -PX, PX * 2, PX * 2, PAL.ember3);
+            }
+        } else {
+            // 开火：暗轮廓 → 主体 → 亮芯 → 白热中线，四段明度坡，
+            // 与球/弹幕同一套分层语言，读起来是同一个世界的东西。
+            const hw = LASER.halfW;
+            pRectRaw(0, -hw - PX, LEN, (hw + PX) * 2, PAL.ink0);
+            pRectRaw(0, -hw, LEN, hw * 2, PAL.blood2);
+            pRectRaw(0, -hw + PX * 2, LEN, (hw - PX * 2) * 2, PAL.ember2);
+            pRectRaw(0, -hw + PX * 4, LEN, (hw - PX * 4) * 2, PAL.ember3);
+            pRectRaw(0, -PX, LEN, PX * 2, PAL.bone1);
+        }
+        ctx.restore();
+
+        // 炮口辉光：让束和 Boss 视觉上连成一体，而不是凭空出现在身前
+        if (!warning) {
+            pCircleAt(beam.x0, beam.y0, LASER.halfW + PX * 2, PAL.ember3);
+            pCircleAt(beam.x0, beam.y0, LASER.halfW - PX, PAL.bone1);
         }
     }
 }

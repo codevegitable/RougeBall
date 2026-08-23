@@ -8,7 +8,7 @@ import { FIELD_TOP, SKILL_Y } from "./layout.js";
 import { drawDungeon } from "./stars.js";
 import { drawParticles } from "./particles.js";
 import { drawEffects, drawHurtOverlay } from "./fx.js";
-import { drawBoss, drawBossBar, drawBossBullets, drawBossDangerZones, drawEnemyBullets } from "./boss.js";
+import { drawBoss, drawBossBar, drawBossBullets, drawBossLasers, drawBossDangerZones, drawEnemyBullets } from "./boss.js";
 import {
     drawUI,
     drawMenu,
@@ -395,6 +395,9 @@ export function render() {
     drawBalls();
     drawParticles();
     drawBossBullets();
+    // 激光在弹幕之后、危险区之前：它比弹幕更致命，必须压在最上层；
+    // 但仍要让暗角与 HUD 盖住它，否则光束会横穿技能栏。
+    drawBossLasers();
     drawBossDangerZones();
     drawEnemyBullets();
 
