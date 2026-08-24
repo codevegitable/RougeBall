@@ -54,7 +54,7 @@ export const REWARD_DATA = [
     { id: "explosion_res", name: "爆炸共鸣", icon: "🧨", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "击碎方块时有 25% 概率对相邻方块造成 1 点伤害" },
     { id: "echo_hit", name: "回音击", icon: "🔔", rarity: "common", type: "ability", maxStacks: 2, desc: "击碎方块时弹片对周围随机方块造成 1 点伤害" },
     { id: "split_ball", name: "分裂之球", icon: "🧬", rarity: "rare", type: "ability", maxStacks: 1, desc: "每击碎 5 个方块便分裂出 1 个新球" },
-    { id: "bouncy_combo", name: "弹射连击", icon: "🛸", rarity: "rare", type: "ability", maxStacks: 1, desc: "球击碎方块后不会反弹，直接继续飞行" },
+    { id: "bouncy_combo", name: "弹射连击", icon: "🛸", rarity: "rare", type: "ability", maxStacks: 1, desc: "每击碎一个目标，3 秒内伤害 +0.5，最高叠加 +4" },
     { id: "vampire", name: "死亡收割", icon: "🧛", rarity: "rare", type: "ability", maxStacks: 2, desc: "击碎方块时有 1.5% 概率恢复 1 条生命" },
     { id: "gold_soul", name: "黄金之魂", icon: "🏆", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "所有来源的分数 ×2" },
     { id: "iron_will", name: "钢铁意志", icon: "🛐", rarity: "rare", type: "ability", maxStacks: 1, desc: "受到弹幕伤害时有 50% 概率格挡" },
@@ -67,7 +67,7 @@ export const REWARD_DATA = [
     { id: "bounce_shield", name: "弹射护盾", icon: "🛡️", rarity: "uncommon", type: "ability", maxStacks: 1, desc: "被弹幕击中时 15% 概率反弹子弹" },
     { id: "swift_move", name: "疾风步", icon: "💨", rarity: "common", type: "bonus", maxStacks: 3, desc: "挡板响应速度 +15%" },
     { id: "life_siphon", name: "生命虹吸", icon: "🩸", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "每击碎 15 个方块回复 0.1 生命" },
-    { id: "double_strike", name: "与我一战", icon: "⚡", rarity: "common", type: "bonus", maxStacks: 3, desc: "球伤害 +2，球速度 +9%" },
+    { id: "double_strike", name: "与我一战", icon: "⚡", rarity: "uncommon", type: "bonus", maxStacks: 3, desc: "球伤害 +2，球速度 +9%" },
     { id: "lucky_charm", name: "幸运护符", icon: "🍀", rarity: "uncommon", type: "ability", maxStacks: 2, desc: "稀有奖励概率 +5%" },
     // ═══ 解锁奖励 ═══
     { id: "guardian_core", name: "守护核心", icon: "🛡️", rarity: "uncommon", type: "ability", maxStacks: 1, tierLock: 0, desc: "每关开始获得 2 秒能量护盾" },

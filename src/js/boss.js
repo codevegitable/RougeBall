@@ -31,7 +31,7 @@ export function hasEncounteredBoss(name) {
 export function getAllBosses() {
     const seen = loadBossLog();
     const result = [];
-    for (const level of [15, 30, 45, 50]) {
+    for (const level of [10, 20, 30, 40, 50]) {
         for (const b of BOSS_CANDIDATES[level]) {
             result.push({ ...b, level, encountered: seen.has(b.name) });
         }
@@ -205,6 +205,9 @@ export function updateBoss() {
     boss.t++;
     boss.flash = Math.max(0, boss.flash - 0.08 * dt);
     boss.hitCooldown = Math.max(0, boss.hitCooldown - dt);
+
+    // 同化方块产出的友军弹：持续追踪 Boss（见函数定义）
+    updateFriendlyBullets(dt);
 
     // 飘移（仅在未执行移动类技能时：charge active / slam active 会自行控制位置）
     const movingAction = boss.action &&
@@ -549,6 +552,7 @@ function onLaserHit(beam) {
     const px = state.paddle.x + state.paddle.width / 2;
     const py = state.paddle.y;
     if (pl.shieldTimer > 0) { spawnRing(px, py, PAL.arc3); playWallHit(); return; }
+    if (state.aegisTimer > 0) { spawnRing(px, py, PAL.gold3); playWallHit(); return; }
     if (state.invulnTimer > 0) return;
     if (pl.bounceShield > 0 && Math.random() < pl.bounceShield) { spawnRing(px, py, PAL.gold3); playWallHit(); return; }
     if (Math.random() < pl.bossResist) { spawnFloatingText(px, py - 24, "格挡！", PAL.moss3); playWallHit(); return; }
@@ -1051,6 +1055,88 @@ function altarCurseEffects() {
     p.altarCdP = hasCd ? 1.5 : 1;
 }
 
+// ─── 净化方块：摧毁全场召唤物与祭坛 ─────────────────────────
+// 返回被净化数量，由 physics.js 换算成对 Boss 的伤害（每单位 3 点）。
+// 摧毁祭坛后必须重跑 altarCurseEffects，立即解除残留在玩家身上的诅咒。
+export function purgeBossSummons() {
+    const boss = state.boss;
+    if (!boss) return 0;
+    let n = 0;
+    for (const m of boss.minions) {
+        spawnParticles(m.x, m.y, m.color || PAL.moss3, 10);
+        spawnRing(m.x, m.y, PAL.moss3);
+        n++;
+    }
+    boss.minions.length = 0;
+    boss.minionRespawn = {};
+    if (boss.altars) {
+        for (const al of boss.altars) {
+            spawnParticles(al.x, al.y, PAL.vio2, 12);
+            spawnRing(al.x, al.y, PAL.vio3);
+            n++;
+        }
+        boss.altars.length = 0;
+    }
+    altarCurseEffects();
+    return n;
+}
+
+// ─── 同化方块产的友军弹 ────────────────────────────────────
+// 敌弹被反转后不停飞向挡板，而是追踪 Boss。每帧最多结算一次合并伤害，
+// 防止几十发同时命中时把 hitCooldown 之外的额外伤害整帧吞光。
+function updateFriendlyBullets(dt) {
+    const bu = state.friendlyBullets;
+    if (bu.length === 0) return;
+    const boss = state.boss;
+    if (!boss) { bu.length = 0; return; }
+    let hits = 0;
+    for (let i = bu.length - 1; i >= 0; i--) {
+        const f = bu[i];
+        f.life -= dt;
+        if (f.life <= 0 || f.x < -30 || f.x > W + 30 || f.y < -30 || f.y > H + 30) {
+            bu.splice(i, 1);
+            continue;
+        }
+        const dx = boss.x - f.x;
+        const dy = boss.y - f.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const spd = Math.hypot(f.vx, f.vy) || 4;
+        const cur = Math.atan2(f.vy, f.vx);
+        const want = Math.atan2(dy, dx);
+        let diff = want - cur;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        const na = cur + Math.max(-0.05 * dt, Math.min(0.05 * dt, diff));
+        f.vx = Math.cos(na) * spd;
+        f.vy = Math.sin(na) * spd;
+        f.x += f.vx * dt;
+        f.y += f.vy * dt;
+        if (dist < boss.r + f.r) {
+            spawnParticles(f.x, f.y, PAL.vio3, 4);
+            hits++;
+            bu.splice(i, 1);
+        }
+    }
+    if (hits > 0) {
+        // 友军弹是玩家收益：压短受击冷却，让这一帧的合并伤害能打出去
+        boss.hitCooldown = Math.min(boss.hitCooldown, 1);
+        damageBoss(Math.min(hits, 5));
+    }
+}
+
+// 画在敌弹之上：金色脉动环是"友军"的通用语言，与敌弹的暗轮廓区分
+export function drawFriendlyBullets() {
+    for (const f of state.friendlyBullets) {
+        const r = Math.max(12, f.r * 2);
+        pBlob(f.x, f.y, r + PX, PAL.ink0, "circle");
+        pBlob(f.x, f.y, r, PAL.vio1, "circle");
+        pBlob(f.x, f.y, r - PX, PAL.vio3, "circle");
+        pRectRaw(f.x - PX / 2, f.y - PX / 2, PX, PX, PAL.bone1);
+        const on = Math.floor(f.life / 5) % 2 === 0;
+        pRing(f.x, f.y, r + PX * 2, on ? PAL.gold3 : PAL.gold2, 1);
+    }
+}
+
 // ─── 可打断蓄力大招 ───────────────────────────────────────
 function executeUltimate(boss, a, dt) {
     if (a.phase === "warn") {
@@ -1199,6 +1285,7 @@ function defeatBoss() {
     for (let i = 0; i < 3; i++) spawnRing(boss.x, boss.y, PAL.gold3);
     screenShake(14, 400);
     state.boss = null; state.bossBullets = []; state.enemyBullets = []; state.bossDangerZones = [];
+    state.friendlyBullets = []; state.aegisTimer = 0; state.frenzyTimer = 0;
     playBossDeath();
     if (state.player.level >= 50) { state.player.score += 1000; state.gameState = STATE.VICTORY; playVictory(); }
     else state.gameState = STATE.BOSS_CLEAR;
@@ -1206,6 +1293,9 @@ function defeatBoss() {
 
 // ─── 子弹更新 ─────────────────────────────────────────────
 function updateBossBullets() {
+    // 冰冻方块：全场敌弹冻结。跳过弹的全部更新（不移动、不追踪、不分裂、
+    // 不命中挡板），冰冻期间弹仍可被球击毁。
+    if (state.bulletFreezeTimer > 0) return;
     const dt = state.dt;
     const bullets = state.bossBullets;
     if (bullets.length > 150) bullets.splice(0, bullets.length - 150);
@@ -1313,6 +1403,7 @@ function updateDangerZones() {
 function onPaddleHit(bullet) {
     const pl = state.player;
     if (pl.shieldTimer > 0) { spawnRing(bullet.x, bullet.y, PAL.arc3); playWallHit(); return; }
+    if (state.aegisTimer > 0) { spawnRing(bullet.x, bullet.y, PAL.gold3); playWallHit(); return; }
     if (state.invulnTimer > 0) return;
     if (pl.bounceShield > 0 && Math.random() < pl.bounceShield) { spawnRing(bullet.x, bullet.y, PAL.gold3); playWallHit(); return; }
     if (Math.random() < pl.bossResist) { spawnFloatingText(state.paddle.x + state.paddle.width / 2, state.paddle.y - 24, "格挡！", PAL.moss3); playWallHit(); return; }
@@ -1526,6 +1617,11 @@ export function drawBossBullets() {
         pBlob(b.x, b.y, r - PX, k.core, "diamond");
         pRectRaw(b.x - PX / 2, b.y - PX / 2, PX, PX, PAL.bone1);  // 中心高光点（仅 1 格）
 
+        // 冰冻方块生效时：弹体包一圈冰环，读作"这颗弹已被冻住"
+        if (state.bulletFreezeTimer > 0) {
+            pRing(b.x, b.y, r + PX, PAL.teal2, 1);
+        }
+
         // 弹种标记：用形状而非仅靠颜色区分，色盲玩家同样能读。
         // 标记一律取本弹种的亮色档，不用骨白——避免又变成"白弹"。
         // 所有标记都画在暗轮廓以内，否则亮点会在浅色地板上脱离弹体单独漂浮。
@@ -1661,5 +1757,10 @@ export function drawEnemyBullets() {
         pBlob(b.x, b.y, r, PAL.ember2, "square");
         pBlob(b.x, b.y, r - PX, PAL.ember3, "square");
         pRectRaw(b.x - PX / 2, b.y - PX / 2, PX, PX, PAL.bone1);  // 中心高光
+
+        // 冰冻方块生效时：弹体包一圈冰环
+        if (state.bulletFreezeTimer > 0) {
+            pRing(b.x, b.y, r + PX, PAL.teal2, 1);
+        }
     }
 }

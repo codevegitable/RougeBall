@@ -10,7 +10,7 @@ export const UNLOCK_TIERS = [
 // 皮肤定义（index -1 为默认皮肤）
 // 颜色取自 palette.js 的受限调色板：paddle1=主体，paddle2=顶部高光
 export const SKIN_DEFS = [
-    { name: "默认", paddle1: "#633a86", paddle2: "#a464c4", glow: "#cfa0e4", skill: null },
+    { name: "默认", paddle1: "#a464c4", paddle2: "#cfa0e4", glow: "#cfa0e4", skill: null },
     { name: "翡翠守卫", paddle1: "#37704c", paddle2: "#63a563", glow: "#95d38c", skill: "jade_barrier" },
     { name: "绯红之刃", paddle1: "#8c2e38", paddle2: "#cf4455", glow: "#f07d84", skill: "swift_blade" },
     { name: "金辉霸主", paddle1: "#a87c27", paddle2: "#e0af38", glow: "#f7dc8c", skill: "golden_blessing" },

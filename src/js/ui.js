@@ -203,23 +203,24 @@ export function drawMenu() {
 
     // 标题：像素砖体大字 + 双层阴影，模仿《以撒》标题的厚重感
     const cx = W / 2;
-    const ty = 132;
-    pText("弹球", cx - 76, ty, PAL.gold2, { size: 46, bold: true, align: "center", ow: PX });
-    pText("ROGUELIKE", cx + 52, ty, PAL.bone1, { size: 30, bold: true, align: "center", ow: PX });
+    const ty = 120;
+    pText("突破地牢", cx, ty, PAL.gold2, { size: 46, bold: true, align: "center", ow: PX });
     // 标题下的分隔纹样
     pRect(cx - 180, ty + 14, 360, PX, PAL.gold1);
     pRect(cx - 120, ty + 14 + PX * 2, 240, PX, PAL.gold0);
+    // 英文副标题
+    pText("BREAK DUNGEON", cx, ty + 44, PAL.mist1, { size: 16, bold: true, align: "center", ow: PX });
 
     // 最高分
     const hs = getHighScore();
     if (hs > 0) {
-        drawIcon("crown", cx - 62, ty + 40, 2, PAL.gold3);
-        pText(`最高 ${Math.floor(hs / 10)}`, cx - 44, ty + 46, PAL.gold3, { size: 14, bold: true });
+        drawIcon("crown", cx - 62, ty + 62, 2, PAL.gold3);
+        pText(`最高 ${Math.floor(hs / 10)}`, cx - 44, ty + 68, PAL.gold3, { size: 14, bold: true });
     }
 
     // 玩法说明：两行，低对比，居中
-    pTextShadow("移动鼠标控制挡板 · 点击发射 · 击碎全部方块过关", cx, 214, PAL.mist1, { size: 13, align: "center" });
-    pTextShadow(`每关选择奖励 · 每 15 关迎战 Boss · 共 ${TOTAL_LEVELS} 层`, cx, 236, PAL.mist0, { size: 12, align: "center" });
+    pTextShadow("移动鼠标控制挡板 · 点击发射 · 击碎全部方块过关", cx, 240, PAL.mist1, { size: 13, align: "center" });
+    pTextShadow(`每关选择奖励 · 每 10 关迎战 Boss · 共 ${TOTAL_LEVELS} 层`, cx, 262, PAL.mist0, { size: 12, align: "center" });
 
     const save = loadSaveData();
     continueBtn = null;
@@ -819,7 +820,6 @@ function curseStatLine(id) {
     switch (id) {
         case "swift": return `当前速度：${Math.round(p.ballSpeedMul * 100)}%`;
         case "rust": return `当前伤害：${p.ballDamage}`;
-        case "barren": return `当前倍率：×${p.scoreMul.toFixed(1)}`;
         case "dim": return `稀有概率：+${p.luckyBonus || 0}%`;
         case "fortify": return `方块血量 +${p.curseBlockHpBonus || 0}`;
         case "arm": return `重甲概率：+${Math.round((p.curseArmoredBonus || 0) * 100)}%`;
@@ -1222,10 +1222,10 @@ export function drawDevModeScreen() {
     y += L + 4;
 
     const entries = [
-        ["Boss HP (15关)", String(BOSS_CANDIDATES[15]?.[0]?.hp), "铁壁执行者"],
-        ["Boss弹速 (15关)", String(BOSS_CANDIDATES[15]?.[0]?.bulletSpeed), "铁壁执行者"],
+        ["Boss HP (10关)", String(BOSS_CANDIDATES[10]?.[0]?.hp), "铁壁执行者"],
+        ["Boss弹速 (10关)", String(BOSS_CANDIDATES[10]?.[0]?.bulletSpeed), "铁壁执行者"],
         ["重甲概率上限", String(ARMORED.maxChance), "最大出现概率"],
-        ["重甲血量加成", String(ARMORED.hpBonus), "额外血量"],
+        ["重甲抵挡次数", String(ARMORED.absorb), "装甲可完全抵挡的攻击数"],
         ["诅咒强度系数", "lv×0.1", "每层诅咒强度增长"],
         ["事件概率", String(GAME_CONFIG.event.chance), "事件房出现概率"],
         ["音效音量", String(GAME_CONFIG.sound.volume), "主音量0~1"],

@@ -68,8 +68,8 @@ export const PAL = {
 };
 
 // 方块血量档位配色（1HP → 6HP），每档三色用于像素高光/主体/阴影。
-// 第 5、6 档是重甲砖：冷秘蓝与暖金，饱和度明显高于前四档，
-// 让玩家一眼分辨"这块要多打几下"。
+// 第 5、6 档是秘蓝与暖金：高血量特殊方块（治疗方块 8HP）专属，
+// 冷色高饱和让玩家一眼分辨"这块特别硬、打碎有收益"。
 export const BLOCK_TIERS = [
     { light: PAL.moss3, base: PAL.moss2, dark: PAL.moss1, shadow: PAL.moss0 },
     { light: PAL.ember3, base: PAL.ember2, dark: PAL.ember1, shadow: PAL.ember0 },

@@ -35,17 +35,27 @@ function drawTopBar() {
     pRect(0, PX, W, PX, PAL.ink3);
     pRect(0, HUD_TOP_H - PX, W, PX, PAL.gold1);
 
-    // ── 左：层数 ──
-    // 不再用浮雕面板（黑框+亮面+暗面三层会在 28px 高度里挤出一团黑），
-    // 改为纯文字 + 一道金色底线，信息密度不变但视觉更轻。
+    // ── 左：层数 + 分数 ──
     pText(`B${p.level}`, 14, 32, PAL.gold3, { size: 20, bold: true });
     const lvW = measure(`B${p.level}`, 20);
     pRect(14, 36, lvW, PX, PAL.gold1);
     pTextShadow("层", 14 + lvW + 6, 32, PAL.mist1, { size: 12 });
+    // 分数放在层数右侧
+    const scoreX = 14 + lvW + 6 + measure("层", 12) + 16;
+    pTextShadow(`${Math.floor(p.score / 10)} 分`, scoreX, 32, PAL.mist0, { size: 13, bold: true });
 
-    // ── 中：分数 ──
-    pText(`${Math.floor(p.score / 10)}`, W / 2, 31, PAL.bone1, { size: 20, bold: true, align: "center" });
-    pTextShadow("分", W / 2 + measure(`${Math.floor(p.score / 10)}`, 20) / 2 + 10, 31, PAL.mist0, { size: 11 });
+    // ── 中：普通关卡倒计时（主球发射前计时未启动，暗色显示） ──
+    if (state.levelTimer > 0 && !state.boss) {
+        const seconds = Math.ceil(state.levelTimer / 60);
+        const color = state.levelTimerStarted
+            ? (seconds <= 10 ? PAL.blood3 : PAL.mist1)
+            : PAL.stone3;
+        pTextShadow(`${seconds}s`, W / 2, 32, color, { size: 18, bold: true, align: "center" });
+    } else {
+        // 无计时器时分数居中显示
+        pText(`${Math.floor(p.score / 10)}`, W / 2, 31, PAL.bone1, { size: 20, bold: true, align: "center" });
+        pTextShadow("分", W / 2 + measure(`${Math.floor(p.score / 10)}`, 20) / 2 + 10, 31, PAL.mist0, { size: 11 });
+    }
 
     // ── 右：生命 ──
     drawHearts(p.lives);
@@ -152,7 +162,7 @@ function drawStatusChips() {
     // 限时挑战优先级最高
     if (state.challenge) {
         const c = state.challenge;
-        const breakable = state.blocks.filter((b) => !b.indestructible).length;
+        const breakable = state.blocks.filter((b) => !b.indestructible && !b.bonusOnly).length;
         const broke = c.initialBreakable - breakable;
         chips.push({
             label: `挑战 ${Math.min(broke, c.target)}/${c.target}·${Math.ceil(c.limit / 60)}s`,
@@ -164,7 +174,11 @@ function drawStatusChips() {
     if (p.maxPiercing > 0) chips.push({ label: `穿透×${p.maxPiercing}`, color: PAL.arc3, icon: "pierce" });
     if (state.balls.length > 1) chips.push({ label: `${state.balls.length} 球`, color: PAL.gold3, icon: "ball" });
     if (p.shieldTimer > 0) chips.push({ label: "护盾", color: PAL.arc3, icon: "shield" });
+    if (state.aegisTimer > 0) chips.push({ label: "圣盾", color: PAL.gold3, icon: "shield" });
+    if (state.frenzyTimer > 0) chips.push({ label: "狂澜", color: PAL.ember3, icon: "fire" });
     if (p.freezeTimer > 0) chips.push({ label: "冻结", color: PAL.teal2, icon: "freeze" });
+    if (state.bulletFreezeTimer > 0) chips.push({ label: "弹冻", color: PAL.teal2, icon: "freeze" });
+    if ((p.comboPower || 0) > 0) chips.push({ label: `连击+${p.comboPower}`, color: PAL.gold3, icon: "star" });
     if (p.ghostTimer > 0) chips.push({ label: "幽灵", color: PAL.vio3, icon: "ghost" });
     if (p.strikeTimer > 0) chips.push({ label: "聚能", color: PAL.gold3, icon: "star" });
     if (p.explosiveTimer > 0) chips.push({ label: "爆裂", color: PAL.ember3, icon: "bomb" });

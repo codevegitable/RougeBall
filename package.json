@@ -1,17 +1,17 @@
 {
   "name": "bounce-roguelike",
-  "version": "1.0.0",
+  "version": "1.5",
   "private": true,
   "license": "MIT",
-  "description": "弹球 Roguelike —— 基于 Canvas 的弹球闯关小游戏",
+  "description": "突破地牢 —— 基于 Canvas 的弹球闯关小游戏",
   "scripts": {
     "dev": "webpack serve --mode development",
     "build": "webpack --mode production",
     "audit": "webpack --config tools/webpack.audit.js"
   },
   "engines": {
-    "node": ">=18",
-    "npm": ">=10"
+    "node": ">=24",
+    "npm": ">=11"
   },
   "devDependencies": {
     "css-loader": "^7.1.2",

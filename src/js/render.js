@@ -8,7 +8,7 @@ import { FIELD_TOP, SKILL_Y } from "./layout.js";
 import { drawDungeon } from "./stars.js";
 import { drawParticles } from "./particles.js";
 import { drawEffects, drawHurtOverlay } from "./fx.js";
-import { drawBoss, drawBossBar, drawBossBullets, drawBossLasers, drawBossDangerZones, drawEnemyBullets } from "./boss.js";
+import { drawBoss, drawBossBar, drawBossBullets, drawBossLasers, drawBossDangerZones, drawEnemyBullets, drawFriendlyBullets } from "./boss.js";
 import {
     drawUI,
     drawMenu,
@@ -74,10 +74,10 @@ export function drawPaddle() {
     // 翼区在地牢背景下几乎隐形。mist0 亮度 ~75，比最亮的主题地板还亮一档，
     // 无论在哪套主题下都能与背景区分。
     // 翼区不参与受击，视觉上要"退后"，银灰的低饱和色相与核心区的高饱和色形成对比。
-    pRect(x, y, w, h, PAL.mist0);
-    pRect(x, y, w, PX, PAL.mist1);               // 顶部高光
+    pRect(x, y, w, h, PAL.mist1);
+    pRect(x, y, w, PX, PAL.bone0);               // 顶部高光
     pRect(x, y + h - PX, w, PX, PAL.ink0);        // 底部阴影
-    pRect(x, y + PX, PX, h - PX * 2, PAL.mist1);
+    pRect(x, y + PX, PX, h - PX * 2, PAL.bone0);
     pRect(x + w - PX, y + PX, PX, h - PX * 2, PAL.ink0);
 
     // 翼区斜纹：低对比对角线，读作"这里是延展出的托板，不是本体"
@@ -171,12 +171,14 @@ function drawCoreTick(bx, y, dir) {
 
 // ─── 球：像素宝珠 ─────────────────────────────────────────
 export function drawBalls() {
-    for (let i = 0; i < state.balls.length; i++) {
-        const b = state.balls[i];
-        // 主球按身份标记着色，而非数组下标：主球身份固定，
-        // 副球落地导致数组重排时金色不会跳到别的球上。
-        const isMain = !!b.isMain;
-        // 中毒：整颗球转紫，玩家一眼能看出伤害为什么变低。
+    // 先画副球，再画主球（主球始终在最上层）
+    for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < state.balls.length; i++) {
+            const b = state.balls[i];
+            const isMain = !!b.isMain;
+            if (pass === 0 && isMain) continue;
+            if (pass === 1 && !isMain) continue;
+            // 中毒：整颗球转紫，玩家一眼能看出伤害为什么变低。
         // 免疫窗口内球缘留一圈苔绿，提示"现在可以安全穿毒圈"。
         const poisoned = b.poisonTimer > 0;
         // 四段明度坡：白热核心 → 亮色 → 主色 → 暗边。
@@ -222,7 +224,8 @@ export function drawBalls() {
             pRect(bx, by, bw, PX, PAL.ink0);
             pRect(bx, by, snap(bw * ratio), PX, PAL.vio3);
         } else if (b.poisonImmune > 0) {
-            pRing(b.x, b.y, b.radius + PX, PAL.moss2, 1);
+                pRing(b.x, b.y, b.radius + PX, PAL.moss2, 1);
+            }
         }
     }
 }
@@ -235,6 +238,31 @@ export function drawBlocks() {
 
         if (bl.indestructible) {
             drawMetalBlock(x, y, w, h);
+            continue;
+        }
+
+        if (bl.freeze) {
+            drawIceBlock(x, y, w, h);
+            continue;
+        }
+
+        if (bl.purify) {
+            drawPurifyBlock(x, y, w, h);
+            continue;
+        }
+
+        if (bl.assimilate) {
+            drawAssimilateBlock(x, y, w, h);
+            continue;
+        }
+
+        if (bl.aegis) {
+            drawAegisBlock(x, y, w, h);
+            continue;
+        }
+
+        if (bl.frenzy) {
+            drawFrenzyBlock(x, y, w, h);
             continue;
         }
 
@@ -266,10 +294,17 @@ export function drawBlocks() {
             drawCracks(x, y, w, h, bl.hp / bl.maxHp, tier.shadow);
         }
 
-        // 重甲砖：四角铆钉 + 中央加固十字，读作"包了铁皮的砖"
-        if (bl.armored) {
+        // 重甲砖：四角铆钉 + 中央加固十字，读作"包了铁皮的砖"。
+        // 装甲只画在有剩余抵挡次数时——抵挡一次攻击后装甲剥落，回归普通方块。
+        if (bl.armored && bl.armorLeft > 0) {
             drawArmorPlating(x, y, w, h);
         }
+
+        // 特殊方块标记
+        if (bl.heal) drawHealMark(x, y, w, h);
+        if (bl.explosive) drawExplosiveMark(x, y, w, h);
+        if (bl.bounce) drawBounceMark(x, y, w, h, tier);
+        if (bl.reward) drawRewardMark(x, y, w, h);
 
         // 移动方块：两侧箭头刻痕
         if (bl.moving) {
@@ -279,27 +314,23 @@ export function drawBlocks() {
     }
 }
 
-// 不可击碎：铆钉铁块。
+// 不可击碎：银灰铁块。
 //
-// 原实现主体用 stone1、暗面用 stone0——而地板主题在 11~40 层正好把这两色
-// 当作砖面与砖缘（stars.js 的 floorAlt/edgeLight），于是障碍物和背景同色，
-// 完全分不出来。现在改成"暗芯 + 亮金属边"的高对比配色：
-//   芯 ink0/ink1 比任何地板砖都暗，边 stone3/mist0 比最亮的地板砖(stone1)都亮，
-// 无论哪套主题，方块边界都有明暗落差。再加警示斜纹强化"打不破"的语义。
+// 用 mist1 替代原 stone0 暗芯，银灰亮度远高于任何地板主题，
+// 确保在所有主题下都能与背景清晰区分。
 function drawMetalBlock(x, y, w, h) {
     // 落地阴影：把铁块从地板上"抬"起来，进一步拉开图底关系
     pRect(x + PX, y + h, w - PX, PX, PAL.ink0);
 
     pRect(x, y, w, h, PAL.ink0);                                   // 硬轮廓
-    // 暗芯用 stone0：它比最亮的地板砖(stone1)暗、比最暗的主题地板(ink1/ink2)亮，
-    // 因此在五套主题下都与地板存在亮度差。用 ink1 会与 41 层主题的砖面同色。
-    pRect(x + PX, y + PX, w - PX * 2, h - PX * 2, PAL.stone0);     // 暗芯
-    pRect(x + PX, y + PX, w - PX * 2, PX, PAL.mist0);              // 顶部亮边
-    pRect(x + PX, y + PX, PX, h - PX * 2, PAL.stone3);             // 左侧亮边
-    pRect(x + PX, y + h - PX * 2, w - PX * 2, PX, PAL.stone0);     // 底部暗边
-    pRect(x + w - PX * 2, y + PX, PX, h - PX * 2, PAL.stone0);     // 右侧暗边
+    // 银灰主体：mist1 亮度远高于任何地板主题，确保对比度
+    pRect(x + PX, y + PX, w - PX * 2, h - PX * 2, PAL.mist0);     // 主体
+    pRect(x + PX, y + PX, w - PX * 2, PX, PAL.mist1);              // 顶部高光
+    pRect(x + PX, y + PX, PX, h - PX * 2, PAL.mist0);              // 左侧亮边
+    pRect(x + PX, y + h - PX * 2, w - PX * 2, PX, PAL.stone2);     // 底部暗边
+    pRect(x + w - PX * 2, y + PX, PX, h - PX * 2, PAL.stone2);     // 右侧暗边
 
-    // 警示斜纹：45° 交替，只画在中段，避免盖掉铆钉与边框
+    // 警示斜纹：45° 交替，用深色增加细节
     const stripeTop = y + PX * 2;
     const stripeH = h - PX * 4;
     if (stripeH >= PX * 2) {
@@ -307,7 +338,7 @@ function drawMetalBlock(x, y, w, h) {
             for (let sy = 0; sy < stripeH; sy += PX) {
                 const off = sx + (sy / PX) * PX;
                 if (off >= w - PX * 3) continue;
-                pRect(x + off, stripeTop + sy, PX, PX, PAL.stone2);
+                pRect(x + off, stripeTop + sy, PX, PX, PAL.stone0);
             }
         }
     }
@@ -344,6 +375,150 @@ function drawArmorPlating(x, y, w, h) {
         pRect(mx, y + inset, PX, h - inset * 2, PAL.stone3);
         pRect(mx + PX, y + inset, PX, h - inset * 2, PAL.stone0);
     }
+}
+
+// 冰冻方块（Boss 收益方块）：整块冰蓝，中心雪花十字。
+// 与血量档位配色彻底脱钩——它不靠硬度说话，颜色就是"打碎有收益"的标识。
+function drawIceBlock(x, y, w, h) {
+    pRect(x + PX, y + h, w - PX, PX, PAL.ink0);
+    pRect(x + w, y + PX, PX, h - PX, PAL.ink0);
+    pRect(x, y, w, h, PAL.ink0);
+    pRect(x + PX, y + PX, w - PX * 2, h - PX * 2, PAL.teal1);
+    pRect(x + PX, y + PX, w - PX * 2, PX, PAL.teal2);
+    pRect(x + PX, y + PX, PX, h - PX * 2, PAL.teal2);
+    pRect(x + PX, y + h - PX * 2, w - PX * 2, PX, PAL.arc0);
+    pRect(x + w - PX * 2, y + PX, PX, h - PX * 2, PAL.arc0);
+    const mx = x + Math.round(w / 2 / PX) * PX;
+    const my = y + Math.round(h / 2 / PX) * PX;
+    ctx.fillStyle = PAL.bone1;
+    ctx.fillRect(mx - PX * 2, my - PX / 2, PX * 4, PX);
+    ctx.fillRect(mx - PX / 2, my - PX * 2, PX, PX * 4);
+    ctx.fillStyle = PAL.teal2;
+    ctx.fillRect(mx - PX / 2, my - PX / 2, PX, PX);
+}
+
+// 收益方块通用骨架：暗轮廓下右投影 + 上左亮/下右暗的浮雕体。
+// 四种新收益方块只换主色与中心徽标，视觉语言与冰冻一致。
+function drawBenefitBody(x, y, w, h, base, light, dark) {
+    pRect(x + PX, y + h, w - PX, PX, PAL.ink0);
+    pRect(x + w, y + PX, PX, h - PX, PAL.ink0);
+    pRect(x, y, w, h, PAL.ink0);
+    pRect(x + PX, y + PX, w - PX * 2, h - PX * 2, base);
+    pRect(x + PX, y + PX, w - PX * 2, PX, light);
+    pRect(x + PX, y + PX, PX, h - PX * 2, light);
+    pRect(x + PX, y + h - PX * 2, w - PX * 2, PX, dark);
+    pRect(x + w - PX * 2, y + PX, PX, h - PX * 2, dark);
+}
+
+function centerGlyph(x, y, w, h) {
+    return {
+        mx: x + Math.round(w / 2 / PX) * PX,
+        my: y + Math.round(h / 2 / PX) * PX,
+    };
+}
+
+// 净化方块：月光白主体 + 苔绿水滴（清洗脏污的语义）
+function drawPurifyBlock(x, y, w, h) {
+    drawBenefitBody(x, y, w, h, PAL.bone1, PAL.white, PAL.mist0);
+    const { mx, my } = centerGlyph(x, y, w, h);
+    ctx.fillStyle = PAL.moss2;
+    ctx.fillRect(mx - PX, my - PX, PX * 2, PX); // 水珠中段
+    ctx.fillRect(mx - PX / 2, my - PX * 2, PX, PX); // 上尖
+    ctx.fillRect(mx - PX / 2, my, PX, PX);          // 下尖
+    ctx.fillStyle = PAL.moss3;
+    ctx.fillRect(mx - PX / 2, my - PX, PX, PX);    // 高光芯
+}
+
+// 同化方块：紫罗兰主体 + 骨白钩形旋涡（迷惑、反转心智）+
+// 金色中心点（被同化的敌弹）
+function drawAssimilateBlock(x, y, w, h) {
+    drawBenefitBody(x, y, w, h, PAL.vio1, PAL.vio2, PAL.vio0);
+    const { mx, my } = centerGlyph(x, y, w, h);
+    ctx.fillStyle = PAL.bone1;
+    ctx.fillRect(mx, my - PX, PX, PX);          // 旋涡上臂
+    ctx.fillRect(mx + PX, my - PX, PX, PX);    // 旋涡右上
+    ctx.fillRect(mx + PX, my, PX, PX);         // 旋涡右
+    ctx.fillRect(mx, my, PX, PX);              // 旋涡内
+    ctx.fillRect(mx - PX, my, PX, PX);         // 旋涡左下
+    ctx.fillStyle = PAL.gold3;
+    ctx.fillRect(mx - PX / 2, my - PX / 2, PX, PX);
+}
+
+// 圣盾方块：暖金主体 + 骨白盾徽（护盾语义复用秘蓝高光）
+function drawAegisBlock(x, y, w, h) {
+    drawBenefitBody(x, y, w, h, PAL.gold2, PAL.gold3, PAL.gold1);
+    const { mx, my } = centerGlyph(x, y, w, h);
+    ctx.fillStyle = PAL.bone1;
+    ctx.fillRect(mx - PX, my - PX * 2, PX * 3, PX);   // 盾顶横梁
+    ctx.fillRect(mx - PX, my - PX, PX * 3, PX);       // 盾身中段
+    ctx.fillRect(mx - PX / 2, my, PX, PX);            // 盾尖
+    ctx.fillStyle = PAL.arc3;
+    ctx.fillRect(mx - PX / 2, my - PX, PX, PX);       // 盾芯
+}
+
+// 狂澜方块：炭橙主体 + 骨白闪电（爆发火力）
+function drawFrenzyBlock(x, y, w, h) {
+    drawBenefitBody(x, y, w, h, PAL.ember2, PAL.ember3, PAL.ember1);
+    const { mx, my } = centerGlyph(x, y, w, h);
+    ctx.fillStyle = PAL.bone1;
+    ctx.fillRect(mx - PX, my - PX * 2, PX, PX);   // 闪电上段左
+    ctx.fillRect(mx, my - PX * 2, PX, PX);       // 闪电上段右
+    ctx.fillRect(mx, my - PX, PX, PX);           // 折线中段右
+    ctx.fillRect(mx - PX, my - PX, PX, PX);      // 折线中段左
+    ctx.fillRect(mx - PX, my, PX, PX);           // 闪电尾段
+    ctx.fillStyle = PAL.ink1;
+    ctx.fillRect(mx - PX / 2, my - PX / 2, PX, PX);
+}
+
+// 治疗方块：中央白色医疗十字（血量高、金色底，十字是"回复"的通用语言）
+function drawHealMark(x, y, w, h) {
+    const mx = x + Math.round(w / 2 / PX) * PX;
+    const my = y + Math.round(h / 2 / PX) * PX;
+    ctx.fillStyle = PAL.bone1;
+    ctx.fillRect(mx - PX * 2, my - PX / 2, PX * 4, PX);
+    ctx.fillRect(mx - PX / 2, my - PX * 2, PX, PX * 4);
+    ctx.fillStyle = PAL.moss3;
+    ctx.fillRect(mx - PX / 2, my - PX / 2, PX, PX);
+}
+
+// 爆炸方块：中央热芯 + 上下左右四粒火花，读作"碎了会炸"
+function drawExplosiveMark(x, y, w, h) {
+    const mx = x + Math.round(w / 2 / PX) * PX;
+    const my = y + Math.round(h / 2 / PX) * PX;
+    ctx.fillStyle = PAL.ember2;
+    ctx.fillRect(mx - PX / 2, my - PX / 2, PX, PX);
+    ctx.fillStyle = PAL.ember3;
+    ctx.fillRect(mx - PX / 2, my - PX / 2, PX / 2, PX / 2);
+    ctx.fillStyle = PAL.ink0;
+    for (const [dx, dy] of [[0, -PX * 2], [0, PX * 2], [-PX * 2, 0], [PX * 2, 0]]) {
+        ctx.fillRect(mx + dx, my + dy, PX, PX);
+    }
+}
+
+// 弹射方块：上下两枚 V 形箭头，读作"打中会被狠狠弹开"
+function drawBounceMark(x, y, w, h, tier) {
+    const mx = x + Math.round(w / 2 / PX) * PX;
+    const c = tier.light;
+    ctx.fillStyle = c;
+    ctx.fillRect(mx - PX * 2, y + PX * 2, PX, PX);
+    ctx.fillRect(mx - PX, y + PX * 3, PX, PX);
+    ctx.fillRect(mx, y + PX * 4, PX, PX);
+    ctx.fillRect(mx - PX * 2, y + h - PX * 3, PX, PX);
+    ctx.fillRect(mx - PX, y + h - PX * 4, PX, PX);
+    ctx.fillRect(mx, y + h - PX * 5, PX, PX);
+}
+
+// 奖励方块：金色描边 + 中央菱形，一眼读出"这是额外收获"
+function drawRewardMark(x, y, w, h) {
+    pStroke(x + PX, y + PX, w - PX * 2, h - PX * 2, PAL.gold2, 1);
+    const mx = x + Math.round(w / 2 / PX) * PX;
+    const my = y + Math.round(h / 2 / PX) * PX;
+    ctx.fillStyle = PAL.gold3;
+    ctx.fillRect(mx - PX / 2, my - PX * 2, PX, PX * 4);
+    ctx.fillRect(mx - PX * 2, my - PX / 2, PX * 4, PX);
+    ctx.fillStyle = PAL.gold2;
+    ctx.fillRect(mx - PX / 2, my - PX, PX, PX);
+    ctx.fillRect(mx - PX, my - PX / 2, PX, PX);
 }
 
 // 裂纹：确定性伪随机，保证同一方块裂纹稳定不闪烁
@@ -397,6 +572,7 @@ export function render() {
     drawBalls();
     drawParticles();
     drawBossBullets();
+    drawFriendlyBullets();
     // 激光在弹幕之后、危险区之前：它比弹幕更致命，必须压在最上层；
     // 但仍要让暗角与 HUD 盖住它，否则光束会横穿技能栏。
     drawBossLasers();

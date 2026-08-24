@@ -83,8 +83,8 @@ const GUIDES = {
         title: "重甲方块",
         icon: "shield",
         lines: [
-            "四角带铆钉的方块额外叠加了大量血量。",
-            "需要多次集火才能击碎，先规划攻击顺序。",
+            "四角带铆钉的方块覆盖着一层装甲。",
+            "装甲能完全抵挡一次攻击，击穿后才能伤及本体。",
         ],
     },
     event: {
@@ -179,6 +179,20 @@ const GUIDES = {
             ];
         },
     },
+    boss5: {
+        title: "最终 Boss",
+        icon: "crown",
+        lines: () => {
+            const b = state.boss;
+            if (!b) return ["Boss 战开始！"];
+            return [
+                `${b.name} 降临！ — 终局之战`,
+                "诅咒祭坛与密集弹幕的终极考验",
+                "弹幕：多种弹幕模式交织，全方位封锁",
+                "优先摧毁祭坛解除诅咒，然后与 Boss 周旋",
+            ];
+        },
+    },
 };
 
 // ─── 队列与生命周期 ───────────────────────────────────────
@@ -209,7 +223,7 @@ export function checkPendingGuides() {
     if (state.player.skills.length > 0) queueGuideOnce("skill");
     if (state.boss) {
         const tier = state.boss.tier;
-        if (tier >= 0 && tier <= 3) queueGuideOnce("boss" + (tier + 1));
+        if (tier >= 0 && tier <= 4) queueGuideOnce("boss" + (tier + 1));
     }
     if (state.blocks.some((b) => b.indestructible)) queueGuideOnce("unbreakable");
     if (state.blocks.some((b) => b.moving)) queueGuideOnce("moving");

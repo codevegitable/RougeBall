@@ -24,6 +24,11 @@ export const state = {
     bossBullets: [],
     bossDangerZones: [], // 地面危险区 {x,y,r,life,type}
     enemyBullets: [],
+    bulletFreezeTimer: 0, // 冰冻方块：全场敌弹冻结剩余帧数（只冻弹，不冻 Boss/召唤物）
+    friendlyBullets: [], // 同化方块：反打 Boss 的友军弹
+    benefitWaveTimer: 0, // Boss 战收益方块周期生成倒计时（帧）
+    aegisTimer: 0, // 圣盾方块：挡板免疫弹幕剩余帧数
+    frenzyTimer: 0, // 狂澜方块：球伤害 +2、球速 +8% 剩余帧数
     invulnTimer: 0, // 受击无敌帧
     hurtTimer: 0, // 受击红闪帧
     // 界面选择
@@ -42,6 +47,10 @@ export const state = {
     guide: null, // 当前展示的新手引导 {id, shownAt}
     guideQueue: [], // 待展示的引导 id 队列（多条同时触发时逐条展示）
     breakCounter: 0, // 击碎方块全局计数，每 10 个生成一个新球
+    levelTimer: 0, // 普通关卡倒计时（帧），0 表示无限制
+    levelTimerStarted: false, // 主球未发射前不开始倒计时
+    levelTimerTarget: 0, // 需要击碎的可击碎方块数
+    levelTimerTotal: 0, // 初始可击碎方块总数
     time: 0, // 全局帧计数
     dt: 1, // 本帧相对 60fps 的时间倍率（帧率无关物理）
     lastTs: 0,

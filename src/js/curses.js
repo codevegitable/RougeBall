@@ -5,9 +5,8 @@ import { CURSE_DATA, BOSS_CURSE_DATA, HEAVY_CURSE_DATA } from "./data/curses.js"
 const CURSE_EFFECTS = {
     swift(n, p) { p.curseSpeedMul *= (1 + n * 0.04); },
     rust(n, p) { p.curseDmgPenalty += Math.min(n, 3); },
-    barren(n, p) { p.curseScoreMul *= (1 - n * 0.06); },
     dim(n, p) { p.curseRarePenalty += n * 3; },
-    fortify(n, p) { p.curseBlockHpBonus += Math.floor(n / 2); },
+    fortify(n, p) { p.curseBlockHpBonus += Math.ceil(n / 2); },
     arm(n, p) { p.curseArmoredBonus += n * 0.03; },
     bullet(n, p) { p.curseBulletSpeedMul *= (1 + n * 0.04); },
     cd(n, p) { p.curseCdMul *= (1 + n * 0.08); },

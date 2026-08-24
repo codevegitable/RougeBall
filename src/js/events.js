@@ -63,6 +63,7 @@ const LEAVE_TEXT = "你离开了事件房";
 // 每种 action.kind 对应一个执行函数，返回 {text, color}
 const ACTION_RUNNERS = {
     buy(a) {
+        if (state.player.score < a.cost) return { text: "分数不足，无法购买", color: PAL.blood3 };
         state.player.score -= a.cost;
         const def = grantEventReward(a.rarity);
         playEventGood();
@@ -157,6 +158,7 @@ const ACTION_RUNNERS = {
         };
     },
     well(a) {
+        if (state.player.score < a.cost) return { text: "分数不足，无法许愿", color: PAL.blood3 };
         state.player.score -= a.cost;
         const def = rollBundleNoSkill(a.rarity);
         if (def) applyReward(def);

@@ -12,10 +12,10 @@ export const COLORS = {
     paddle2: PAL.vio2,
     ball: PAL.bone1,
     ballGlow: PAL.gold2,
-    // 1HP → 6HP，后两档为重甲砖（秘蓝 / 暖金）
+    // 1HP → 6HP，后两档（秘蓝 / 暖金）留给高血量特殊方块（如治疗方块 8HP）
     blockColors: [PAL.moss2, PAL.ember2, PAL.blood2, PAL.vio2, PAL.arc2, PAL.gold2],
     blockGlow: [PAL.moss3, PAL.ember3, PAL.blood3, PAL.vio3, PAL.arc3, PAL.gold3],
-    unbreakable: PAL.stone1,
+    unbreakable: PAL.mist0,
     ui: PAL.bone0,
     uiDim: PAL.mist0,
     gold: PAL.gold2,
@@ -60,7 +60,7 @@ export const RARITY_META = {
 
 // ─── 进度配置 ─────────────────────────────────────────────
 export const TOTAL_LEVELS = 50;
-export const BOSS_LEVELS = new Set([15, 30, 45, 50]);
+export const BOSS_LEVELS = new Set([10, 20, 30, 40, 50]);
 export const isBossLevel = (n) => BOSS_LEVELS.has(n);
 
 // ─── 方块（默认基准，关卡内按层数动态缩放） ───────────────

@@ -1,7 +1,10 @@
 import { W, H, GRID_Y, BLOCK_GAP } from "./constants.js";
 import { mulberry32 } from "./utils.js";
 import { state } from "./state.js";
-import { BLOCK_SIZE_TABLE, HP_TABLE, HP_TIER, ARMORED, BLOCK_COUNT } from "./data/levels.js";
+import { PAL } from "./palette.js";
+import { spawnParticles } from "./particles.js";
+import { spawnRing, spawnFloatingText } from "./fx.js";
+import { BLOCK_SIZE_TABLE, HP_TABLE, HP_TIER, ARMORED, BLOCK_COUNT, SPECIALS, BENEFIT_BLOCK, BENEFIT_SPAWN } from "./data/levels.js";
 
 // 方块尺寸随关卡递减（查表）
 function blockSizeFor(level) {
@@ -139,20 +142,183 @@ export function createBlocksFromGrid(grid, num = 1) {
             const moving = !indestructible && rng() < movingChance
                 ? { phase: rng() * Math.PI * 2, speed: 0.010 + rng() * 0.012, amp: 26 + rng() * 40 }
                 : null;
-            // 重甲砖：额外叠血量的硬点。不与移动方块叠加，避免"追着打又打不烂"
+            // 重甲砖：带 1 层装甲，可完全抵挡一次攻击。不与移动方块叠加，避免"追着打又打不烂"
             const armored = !indestructible && !moving && rng() < armoredChance;
-            // 血量加成随层数增长：第 18 关 +2，每 6 关 +1，上限 +6
-            const armorBonus = armored ? Math.min(6, 2 + Math.floor((num - 18) / 6)) : 0;
-            const hpBonus = (state.player.curseBlockHpBonus || 0) + armorBonus;
-            const totalHp = type + hpBonus;
+            // 特殊方块：可叠加在普通/移动/重甲方块上（互相排斥，每种方块只能有一种特殊）
+            const special = !indestructible ? rollSpecial(rng, num) : null;
+            const hpBonus = (state.player.curseBlockHpBonus || 0);
+            const totalHp = special === "heal" ? SPECIALS.heal.hp : type + hpBonus;
 
             bl.push({
                 x, y, baseX: x, baseY: y, w: bw, h: bh,
                 hp: indestructible ? Infinity : totalHp,
                 maxHp: totalHp,
                 indestructible, moving, armored,
+                armorLeft: armored ? ARMORED.absorb : 0,
+                explosive: special === "explosive",
+                heal: special === "heal",
+                bounce: special === "bounce",
             });
         }
     }
+
+    // 奖励方块：5% 概率出现（整关判定一次），独立生成于网格空隙。
+// bonusOnly 标记使其不计入关卡总方块数与通关条件（见 game.js 的 hasBreakable）。
+    if (num >= SPECIALS.reward.minLevel && rng() < SPECIALS.reward.chance) {
+        const rb = makeRewardBlock(bl, cols, bw, bh, gap, startX, num);
+        if (rb) bl.push(rb);
+    }
     return bl;
+}
+
+// 特殊方块随机 roll：不做多重判定（用权重区间一次落点），保证互斥
+function rollSpecial(rng, num) {
+    let total = 0;
+    const entries = [];
+    for (const [id, def] of Object.entries(SPECIALS)) {
+        if (id === "reward" || num < def.minLevel) continue;
+        entries.push([id, def.chance]);
+        total += def.chance;
+    }
+    const roll = rng() * total;
+    for (const [id, w] of entries) {
+        if (roll < w) return id;
+    }
+    return null;
+}
+
+// 奖励方块：占据半场一个空格，30 秒后自灭。击碎后必定获得一个稀有奖励。
+function makeRewardBlock(existing, cols, bw, bh, gap, startX, num) {
+    const rng = mulberry32(num * 617 + 89);
+    const rows = Math.min(3, Math.floor((H - GRID_Y - 150) / (bh + gap)));
+    for (let attempt = 0; attempt < 24; attempt++) {
+        const col = Math.floor(rng() * cols);
+        const row = Math.floor(rng() * Math.max(1, rows));
+        const x = startX + col * (bw + gap);
+        const y = GRID_Y + row * (bh + gap);
+        const overlaps = existing.some(
+            (b) => x < b.x + b.w && x + bw > b.x && y < b.y + b.h && y + bh > b.y
+        );
+        if (overlaps) continue;
+        return {
+            x, y, baseX: x, baseY: y, w: bw, h: bh,
+            hp: SPECIALS.reward.hp, maxHp: SPECIALS.reward.hp,
+            indestructible: false, moving: null, armored: false, armorLeft: 0,
+            explosive: false, heal: false, bounce: false,
+            reward: true, bonusOnly: true,
+            expireAt: state.time + SPECIALS.reward.life,
+        };
+    }
+    return null;
+}
+
+// Boss 关收益方块：冰冻方块，击碎冻结全场敌弹 2 秒。生成于上半场、
+// 避开 Boss 游走区，30s 后自灭；不计通关（Boss 关不清方块）。
+export function createBenefitBlocks(level) {
+    const count = 2 + (level >= 30 ? 1 : 0) + (level >= 45 ? 1 : 0);
+    const def = BENEFIT_BLOCK.freeze;
+    const blocks = [];
+    for (let i = 0; i < count; i++) {
+        for (let attempt = 0; attempt < 30; attempt++) {
+            const x = 60 + Math.random() * (W - 60 - def.w - 60);
+            const y = 90 + Math.random() * 240;
+            // 避开 Boss 出生/游走区（中心 ±170，高度 < 300）
+            if (Math.abs(x + def.w / 2 - W / 2) < 170) continue;
+            const overlaps = blocks.some(
+                (b) => x < b.x + b.w && x + def.w > b.x && y < b.y + b.h && y + def.h > b.y
+            );
+            if (overlaps) continue;
+            blocks.push({
+                x, y, baseX: x, baseY: y, w: def.w, h: def.h,
+                hp: def.hp, maxHp: def.hp,
+                indestructible: false, moving: null, armored: false, armorLeft: 0,
+                explosive: false, heal: false, bounce: false, reward: false,
+                freeze: true, bonusOnly: true,
+                expireAt: state.time + def.life,
+            });
+            break;
+        }
+    }
+    return blocks;
+}
+
+// ═══ 周期收益方块（Boss 战中途随机补充） ═══
+//
+// 四款新收益方块不在开局一次性铺完：每 12~18 秒随机一波、每波 2 个，
+// 落点在中下部场地随机选取（不生成在太靠前的位置——即 Boss 游走区）。
+// 方块只补充不替代：冰冻方块仍按开局固定生成，是整场可预期的基线福利。
+//
+// 由 game.js 主循环在 Boss 战每帧调用。计时归零时尝试生波：
+// 同场新方块已达上限则顺延到下一周期，避免场地被塞满。
+
+// 层数解锁的新方块池（去重后不足 2 种时允许重复同款）
+function benefitPoolFor(level) {
+    return Object.keys(BENEFIT_BLOCK).filter(
+        (k) => k !== "freeze" && level >= (BENEFIT_BLOCK[k].minLevel || 0)
+    );
+}
+
+// 落点候选：随机 x/y，避开 Boss 游走中心列、现有方块、Boss 本体与召唤物
+function tryPlaceBenefitBlock(def) {
+    for (let attempt = 0; attempt < 30; attempt++) {
+        const x = BENEFIT_SPAWN.padX + Math.random() * (W - BENEFIT_SPAWN.padX * 2 - def.w);
+        const y = BENEFIT_SPAWN.minY + Math.random() * (BENEFIT_SPAWN.maxY - BENEFIT_SPAWN.minY);
+        if (Math.abs(x + def.w / 2 - W / 2) < BENEFIT_SPAWN.bossAvoid) continue;
+        const overlaps = state.blocks.some(
+            (b) => x < b.x + b.w && x + def.w > b.x && y < b.y + b.h && y + def.h > b.y
+        );
+        if (overlaps) continue;
+        // 避开 Boss 本体与召唤物/祭坛（它们都是圆形判定，半径 14~20）
+        const cx = x + def.w / 2, cy = y + def.h / 2;
+        const bad = (state.boss && Math.hypot(cx - state.boss.x, cy - state.boss.y) < state.boss.r + 30) ||
+            (state.boss && state.boss.minions && state.boss.minions.some((m) => Math.hypot(cx - m.x, cy - m.y) < m.r + 20)) ||
+            (state.boss && state.boss.altars && state.boss.altars.some((al) => Math.hypot(cx - al.x, cy - al.y) < al.r + 20));
+        if (bad) continue;
+        return { x, y };
+    }
+    return null;
+}
+
+export function updateBenefitSpawns() {
+    state.benefitWaveTimer--;
+    if (state.benefitWaveTimer > 0) return;
+    state.benefitWaveTimer =
+        BENEFIT_SPAWN.minInterval + Math.random() * (BENEFIT_SPAWN.maxInterval - BENEFIT_SPAWN.minInterval);
+
+    // 同场新方块数量上限（冰冻不计入）
+    const active = state.blocks.filter((b) => b.bonusOnly && !b.freeze).length;
+    if (active >= BENEFIT_SPAWN.maxActive) return;
+
+    const pool = benefitPoolFor(state.player.level);
+    if (pool.length === 0) return;
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const types = [];
+    for (const k of shuffled) {
+        if (types.length >= BENEFIT_SPAWN.perWave) break;
+        types.push(k);
+    }
+    while (types.length < BENEFIT_SPAWN.perWave) types.push(shuffled[0]);
+
+    let spawned = 0;
+    for (const type of types) {
+        const def = BENEFIT_BLOCK[type];
+        const pos = tryPlaceBenefitBlock(def);
+        if (!pos) continue;
+        const flags = { freeze: false, purify: false, assimilate: false, aegis: false, frenzy: false };
+        flags[type] = true;
+        state.blocks.push({
+            x: pos.x, y: pos.y, baseX: pos.x, baseY: pos.y, w: def.w, h: def.h,
+            hp: def.hp, maxHp: def.hp,
+            indestructible: false, moving: null, armored: false, armorLeft: 0,
+            explosive: false, heal: false, bounce: false, reward: false,
+            ...flags, bonusOnly: true,
+            expireAt: state.time + def.life,
+        });
+        spawnParticles(pos.x + def.w / 2, pos.y + def.h / 2, PAL.gold2, 8);
+        spawnRing(pos.x + def.w / 2, pos.y + def.h / 2, PAL.gold3);
+        spawned++;
+    }
+    if (spawned > 0) {
+        spawnFloatingText(W / 2, BENEFIT_SPAWN.maxY + 30, "收益方块出现！", PAL.gold2);
+    }
 }

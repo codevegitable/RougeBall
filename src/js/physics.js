@@ -1,8 +1,9 @@
-import { W, H, COLORS, MAX_BALLS, BALL_BASE_SPEED, PADDLE_BASE_W, BALL_BLOCK_ACCEL, BALL_SPEED_CAP, STATE } from "./constants.js";
+import { W, H, COLORS, MAX_BALLS, BALL_BASE_SPEED, PADDLE_BASE_W, BALL_BLOCK_ACCEL, BALL_SPEED_CAP, STATE, RARITY } from "./constants.js";
 import { state, addScore, loseLife } from "./state.js";
 import { spawnParticles } from "./particles.js";
 import { screenShake, hitStop, flashPaddle, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
-import { damageBoss, bulletColor } from "./boss.js";
+import { damageBoss, bulletColor, purgeBossSummons } from "./boss.js";
+import { grantEventReward } from "./events.js";
 import {
     playWallHit,
     playPaddleHit,
@@ -11,6 +12,7 @@ import {
     playBallLost,
     playPlayerHit,
     playHeal,
+    playEventGood,
 } from "./sound.js";
 import { PAL } from "./palette.js";
 import { FIELD_TOP } from "./layout.js";
@@ -41,6 +43,14 @@ export function updateEnemies() {
     if (state.player.freezeTimer > 0) return;
     const dt = state.dt;
 
+    // 方块时效：奖励方块 / Boss 收益方块到期自灭（不计入通关条件）
+    for (let i = state.blocks.length - 1; i >= 0; i--) {
+        const bl = state.blocks[i];
+        if (!bl.expireAt || state.time <= bl.expireAt) continue;
+        state.blocks.splice(i, 1);
+        spawnParticles(bl.x + bl.w / 2, bl.y + bl.h / 2, PAL.stone3, 6);
+    }
+
     for (const bl of state.blocks) {
         if (bl.moving) {
             bl.moving.phase += bl.moving.speed * dt;
@@ -52,8 +62,11 @@ export function updateEnemies() {
     if (bullets.length > 100) bullets.splice(0, bullets.length - 100);
     for (let i = bullets.length - 1; i >= 0; i--) {
         const bu = bullets[i];
+        // 冰冻方块：全场敌弹冻结（停住但不消失，球仍可击毁）
+        if (state.bulletFreezeTimer > 0) continue;
         // 弹幕偏转：挡板附近敌弹减速
-        if (p.deflectRadius > 0 && bu.y > state.paddle.y - p.deflectRadius) {
+        const deflect = state.player.deflectRadius || 0;
+        if (deflect > 0 && bu.y > state.paddle.y - deflect) {
             bu.vx *= 0.98;
             bu.vy *= 0.98;
         }
@@ -85,6 +98,11 @@ function enemyPaddleHit(bullet) {
         playWallHit();
         return;
     }
+    if (state.aegisTimer > 0) {
+        spawnRing(bullet.x, bullet.y, PAL.gold3);
+        playWallHit();
+        return;
+    }
     if (state.invulnTimer > 0) return;
     if (pl.bounceShield > 0 && Math.random() < pl.bounceShield) {
         spawnRing(bullet.x, bullet.y, PAL.gold3);
@@ -103,25 +121,172 @@ function enemyPaddleHit(bullet) {
     loseLife(1);
 }
 
-// ─── 方块伤害工具（AoE / 连锁破坏） ───────────────────────
+// ─── 方块破坏与伤害工具（AoE / 连锁破坏） ───────────────────
+// 伤害方块必须走 damageBlock，破坏方块必须走 destroyBlock，
+// 保证装甲抵挡 / 特殊方块效果 / 击碎钩子在所有伤害来源（球、AoE、连锁）下一致。
 function damageBlock(bl, dmg) {
     if (bl.indestructible) return;
+    const cx = bl.x + bl.w / 2;
+    const cy = bl.y + bl.h / 2;
+    if (bl.armorLeft > 0) {
+        // 装甲抵挡：完全无效化本次伤害（任意数值）
+        bl.armorLeft--;
+        spawnParticles(cx, cy, PAL.stone3, 6);
+        spawnRing(cx, cy, PAL.mist1);
+        return;
+    }
     bl.hp -= dmg;
     if (bl.hp <= 0) {
-        const idx = state.blocks.indexOf(bl);
-        if (idx === -1) return;
-        const ci = Math.min(bl.maxHp - 1, 3);
-        const col = COLORS.blockColors[ci];
-        const cx = bl.x + bl.w / 2;
-        const cy = bl.y + bl.h / 2;
-        spawnParticles(cx, cy, col, 6 + bl.maxHp * 2);
-        spawnRing(cx, cy, COLORS.blockGlow[ci]);
-        addScore(bl.maxHp * 100);
-        state.blocks.splice(idx, 1);
-        playBlockHit();
+        destroyBlock(bl, cx, cy, { byBall: false });
     } else {
-        spawnParticles(bl.x + bl.w / 2, bl.y + bl.h / 2, PAL.bone1, 2);
+        spawnParticles(cx, cy, PAL.bone1, 2);
     }
+}
+
+function destroyBlock(bl, cx, cy, opts = {}) {
+    const idx = state.blocks.indexOf(bl);
+    if (idx === -1) return;
+    const ci = Math.min(bl.maxHp - 1, 3);
+    const col = COLORS.blockColors[ci];
+    state.blocks.splice(idx, 1);
+    spawnParticles(cx, cy, col, (opts.byBall ? 10 : 6) + bl.maxHp * 3);
+    spawnRing(cx, cy, COLORS.blockGlow[ci]);
+    spawnFloatingText(cx, cy - 6, `+${bl.maxHp * 10}`);
+    if (opts.byBall) {
+        screenShake(5, 100);
+        hitStop(2);
+        playBlockBreak();
+    } else {
+        playBlockHit();
+    }
+    addScore(bl.maxHp * 100);
+
+    // 特殊方块效果（内存上互相排斥，按标记逐个判定即可）
+    if (bl.explosive) explodeNeighbors(bl);
+    if (bl.heal) healBlockEffect(cx, cy);
+    if (bl.reward) rewardBlockEffect(cx, cy);
+    if (bl.freeze) freezeBlockEffect(cx, cy);
+    if (bl.purify) purifyBlockEffect(cx, cy);
+    if (bl.assimilate) assimilateBlockEffect(cx, cy);
+    if (bl.aegis) aegisBlockEffect(cx, cy);
+    if (bl.frenzy) frenzyBlockEffect(cx, cy);
+
+    killHooks(cx, cy, { block: bl });
+}
+
+// 爆炸方块：以方块中心为圆心，半径约 1.4 倍方块最大边长范围内的所有方块
+// 各受 1 点伤害（含对角线方向的相邻方块）。通过 damageBlock → destroyBlock
+// 传导，被连锁击碎的方块会再次触发自身效果与击碎钩子（包括连环爆炸）。
+// 方块只会被击碎一次，链必终止。
+function explodeNeighbors(bl) {
+    const cx = bl.x + bl.w / 2;
+    const cy = bl.y + bl.h / 2;
+    spawnRing(cx, cy, PAL.ember2);
+    spawnParticles(cx, cy, PAL.ember2, 14);
+    screenShake(3, 80);
+    const radius = Math.max(bl.w, bl.h) * 1.4;
+    for (const nb of state.blocks) {
+        if (nb === bl || nb.indestructible) continue;
+        const dx = nb.x + nb.w / 2 - cx;
+        const dy = nb.y + nb.h / 2 - cy;
+        if (dx * dx + dy * dy <= radius * radius) {
+            damageBlock(nb, 1);
+        }
+    }
+}
+
+// 治疗方块：击碎恢复 0.1 条命（受治疗效果减益影响）
+function healBlockEffect(cx, cy) {
+    const p = state.player;
+    p.lives += 0.1 * (p.healMul || 1);
+    spawnFloatingText(cx, cy - 10, "生命 +0.1", PAL.moss3);
+    playHeal();
+}
+
+// 奖励方块：击碎必定获得一个稀有奖励（立即发放，复用事件的即发奖励流程）
+function rewardBlockEffect(cx, cy) {
+    const def = grantEventReward(RARITY.RARE);
+    if (def) {
+        spawnFloatingText(400, 200, `获得稀有奖励：${def.icon} ${def.name}`, PAL.gold3);
+    }
+    spawnFloatingText(cx, cy - 10, "稀有奖励！", PAL.gold3);
+    spawnParticles(cx, cy, PAL.gold3, 12);
+    playEventGood();
+}
+
+// 冰冻方块（Boss 收益方块）：击碎冻结全场敌弹 2 秒
+function freezeBlockEffect(cx, cy) {
+    state.bulletFreezeTimer = 120;
+    spawnFloatingText(cx, cy - 10, "敌弹冻结 2 秒！", PAL.teal2);
+    spawnParticles(cx, cy, PAL.teal2, 12);
+    playHeal();
+}
+
+// 净化方块：摧毁全场召唤物与祭坛，每净化一个对 Boss 造成 3 点伤害
+function purifyBlockEffect(cx, cy) {
+    const n = purgeBossSummons();
+    if (n > 0) {
+        const boss = state.boss;
+        if (boss) {
+            boss.hitCooldown = Math.min(boss.hitCooldown, 1);
+            damageBoss(Math.min(n * 3, 15));
+        }
+        spawnFloatingText(cx, cy - 10, `净化 ${n} 个召唤物！`, PAL.moss3);
+        spawnParticles(cx, cy, PAL.moss3, 14);
+        screenShake(4, 100);
+    } else {
+        spawnFloatingText(cx, cy - 10, "净化：场上无召唤物", PAL.mist1);
+        spawnParticles(cx, cy, PAL.moss3, 6);
+    }
+    playHeal();
+}
+
+// 同化方块：全场敌弹反转为友军弹，追打 Boss（每颗 1 伤害）
+function assimilateBlockEffect(cx, cy) {
+    let n = 0;
+    const cap = 60 - state.friendlyBullets.length;
+    for (const b of [...state.bossBullets, ...state.enemyBullets]) {
+        if (n >= cap) break;
+        // 速度反向再叠加扰动，避免全部沿原路折返挤成一束
+        const spd = Math.hypot(b.vx, b.vy) || 4;
+        const a = Math.atan2(-b.vy, -b.vx) + (Math.random() - 0.5) * 0.6;
+        state.friendlyBullets.push({
+            x: b.x, y: b.y,
+            vx: Math.cos(a) * spd * 0.9,
+            vy: Math.sin(a) * spd * 0.9,
+            r: (b.r || 5) + 1,
+            life: 5 * 60,
+        });
+        spawnParticles(b.x, b.y, PAL.vio2, 2);
+        n++;
+    }
+    state.bossBullets.length = 0;
+    state.enemyBullets.length = 0;
+    if (n > 0) {
+        spawnFloatingText(cx, cy - 10, `同化 ${n} 发敌弹！`, PAL.vio3);
+        spawnParticles(cx, cy, PAL.vio2, 14);
+        screenShake(4, 100);
+    } else {
+        spawnFloatingText(cx, cy - 10, "同化：场上无敌弹", PAL.mist1);
+        spawnParticles(cx, cy, PAL.vio2, 6);
+    }
+    playWallHit();
+}
+
+// 圣盾方块：5 秒内挡板免疫一切弹幕（Boss 冲撞/跳砸仍生效）
+function aegisBlockEffect(cx, cy) {
+    state.aegisTimer = 5 * 60;
+    spawnFloatingText(cx, cy - 10, "圣盾 5 秒！", PAL.gold3);
+    spawnParticles(cx, cy, PAL.gold3, 14);
+    playHeal();
+}
+
+// 狂澜方块：8 秒内所有球伤害 +2、球速 +8%
+function frenzyBlockEffect(cx, cy) {
+    state.frenzyTimer = 8 * 60;
+    spawnFloatingText(cx, cy - 10, "狂澜 8 秒！", PAL.ember3);
+    spawnParticles(cx, cy, PAL.ember2, 14);
+    playHeal();
 }
 
 function blocksNear(cx, cy, radius) {
@@ -146,54 +311,69 @@ function highestHpBlock() {
     return best;
 }
 
-// 球击碎方块后的连锁效果钩子
-function postBreakHooks(cx, cy, bl) {
+// 被击毁对象（方块 / 召唤物 / 祭坛）后的连锁效果钩子。
+// 召唤物与祭坛同样触发方块类奖励（爆炸、胶弹、末路追踪、贯穿计数、连击力量等），
+// 但不触发任何与生命回复相关的奖励（吸血、血之吸吮、生命虹吸）。
+function killHooks(cx, cy, opts) {
     const p = state.player;
     const breaks = p.perks;
+    const fromBlock = !!opts.block;
+    const bl = opts.block;
 
-    // 吸血之触
-    if (p.healChance > 0 && Math.random() < p.healChance) {
-        p.lives += 1 * (p.healMul || 1);
-        spawnFloatingText(cx, cy - 20, "生命 +1", PAL.moss3);
-        playHeal();
-    }
-    // 血之吸吮技能（每击碎 5 个方块回复 0.1 命）
-    if (p.siphonTimer > 0) {
-        p._siphonSkillCounter = (p._siphonSkillCounter || 0) + 1;
-        if (p._siphonSkillCounter >= 5) {
-            p._siphonSkillCounter = 0;
-            p.lives += 0.1 * (p.healMul || 1);
-            spawnFloatingText(cx, cy - 20, "生命 +0.1（技能）", PAL.blood3);
+    // ── 仅方块：生命回复类 ──
+    if (fromBlock) {
+        // 吸血之触
+        if (p.healChance > 0 && Math.random() < p.healChance) {
+            p.lives += 1 * (p.healMul || 1);
+            spawnFloatingText(cx, cy - 20, "生命 +1", PAL.moss3);
             playHeal();
         }
-    }
-    // 生命虹吸：每击碎 15 个方块回复 0.1 命
-    if (p.lifeSiphon > 0) {
-        p._siphonCounter = (p._siphonCounter || 0) + 1;
-        if (p._siphonCounter >= 15) {
-            p._siphonCounter = 0;
-            p.lives += 0.1 * (p.healMul || 1);
-            spawnFloatingText(cx, cy - 20, `生命 +${0.1}`, PAL.moss3);
-            playHeal();
+        // 血之吸吮技能（每击碎 5 个方块回复 0.1 命）
+        if (p.siphonTimer > 0) {
+            p._siphonSkillCounter = (p._siphonSkillCounter || 0) + 1;
+            if (p._siphonSkillCounter >= 5) {
+                p._siphonSkillCounter = 0;
+                p.lives += 0.1 * (p.healMul || 1);
+                spawnFloatingText(cx, cy - 20, "生命 +0.1（技能）", PAL.blood3);
+                playHeal();
+            }
         }
-    }
-    // 震荡诅咒：每次击碎方块球速 +n×1.5%（每关重置）
-    if (p.curseDecelPerLevel > 0) {
-        p.curseDecayCounter = (p.curseDecayCounter || 0) + 1;
-        // 每击碎一个方块，累加一次微量速度提升
-        const speedUp = 1 + p.curseDecelPerLevel * p.curseDecayCounter * 0.002;
-        for (const b of state.balls) {
-            if (b.speed < 10) {
-                b.speed *= speedUp;
-                const spd = Math.hypot(b.vx, b.vy);
-                if (spd > 0.01) {
-                    const ratio = b.speed / spd;
-                    b.vx *= ratio;
-                    b.vy *= ratio;
+        // 生命虹吸：每击碎 15 个方块回复 0.1 命
+        if (p.lifeSiphon > 0) {
+            p._siphonCounter = (p._siphonCounter || 0) + 1;
+            if (p._siphonCounter >= 15) {
+                p._siphonCounter = 0;
+                p.lives += 0.1 * (p.healMul || 1);
+                spawnFloatingText(cx, cy - 20, `生命 +${0.1}`, PAL.moss3);
+                playHeal();
+            }
+        }
+        // 震荡诅咒：每次击碎方块球速 +n×1.5%（每关重置）
+        if (p.curseDecelPerLevel > 0) {
+            p.curseDecayCounter = (p.curseDecayCounter || 0) + 1;
+            // 每击碎一个方块，累加一次微量速度提升
+            const speedUp = 1 + p.curseDecelPerLevel * p.curseDecayCounter * 0.002;
+            for (const b of state.balls) {
+                if (b.speed < 10) {
+                    b.speed *= speedUp;
+                    const spd = Math.hypot(b.vx, b.vy);
+                    if (spd > 0.01) {
+                        const ratio = b.speed / spd;
+                        b.vx *= ratio;
+                        b.vy *= ratio;
+                    }
                 }
             }
         }
+        // 弹射连击：每击碎一个方块，3 秒内伤害 +0.5，最多 +4
+        if (breaks.bouncy_combo) {
+            p.comboTimer = 180;
+            p.comboPower = Math.min(4, (p.comboPower || 0) + 0.5);
+            spawnFloatingText(cx, cy - 22, `力量 +0.5（${p.comboPower}）`, PAL.gold3);
+        }
     }
+
+    // ── 通用：作用于方块的伤害类（召唤物 / 祭坛被毁时同样触发） ──
     // 回音击：弹片伤及随机邻块
     const echoN = breaks.echo_hit || 0;
     for (let e = 0; e < echoN; e++) {
@@ -210,7 +390,7 @@ function postBreakHooks(cx, cy, bl) {
         for (const nb of blocksNear(cx, cy, 80)) damageBlock(nb, 1);
         screenShake(4, 90);
     }
-    // 末路追踪：每击碎 8 个追踪一次
+    // 末路追踪：每击碎 8 个目标追踪一次
     if (breaks.meteor) {
         p.breakCount = (p.breakCount || 0) + 1;
         if (p.breakCount % 8 === 0) {
@@ -224,13 +404,14 @@ function postBreakHooks(cx, cy, bl) {
             }
         }
     }
-    // 碎裂余波：击碎时概率对左右相邻方块造成 1 点伤害
+    // 碎裂余波：击碎时概率对相邻方块造成 1 点伤害
     if (p.shatterChance > 0 && Math.random() < p.shatterChance) {
-        for (const nb of blocksNear(cx, cy, bl.w * 1.2)) {
+        const radius = bl ? bl.w * 1.2 : 110;
+        for (const nb of blocksNear(cx, cy, radius)) {
             if (nb !== bl) damageBlock(nb, 1);
         }
     }
-    // 能量涌动：每击碎 5 个方块，下一击伤害 +1（每关重置）
+    // 能量涌动：每击碎 5 个目标，下一击伤害 +1（每关重置）
     if (p.surgeNeed > 0) {
         p.surgeCounter = (p.surgeCounter || 0) + 1;
         if (p.surgeCounter >= p.surgeNeed) {
@@ -238,6 +419,12 @@ function postBreakHooks(cx, cy, bl) {
             p.surgeBonus = (p.surgeBonus || 0) + 1;
             spawnFloatingText(cx, cy - 20, `蓄力 +${p.surgeBonus}`, PAL.moss3);
         }
+    }
+    // 弹射连击（召唤物 / 祭坛）：同样累计力量
+    if (!fromBlock && breaks.bouncy_combo) {
+        p.comboTimer = 180;
+        p.comboPower = Math.min(4, (p.comboPower || 0) + 0.5);
+        spawnFloatingText(cx, cy - 22, `力量 +0.5（${p.comboPower}）`, PAL.gold3);
     }
 }
 
@@ -254,6 +441,8 @@ const onBallHits = (b, cx) => {
 export function ballDamageOf(b) {
     const p = state.player;
     let dmg = p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
+    // 狂澜方块：所有球伤害 +2
+    if (state.frenzyTimer > 0) dmg += 2;
     if (b && b.poisonTimer > 0) dmg = Math.max(1, Math.floor(dmg * 0.75));
     // 精准打击：空中累积伤害加成，击中方块后由 onBallHits 重置
     if (b && p.precisionDmg > 0 && b.airFrames) {
@@ -264,6 +453,10 @@ export function ballDamageOf(b) {
     if (b && p.surgeBonus > 0) {
         dmg += p.surgeBonus;
         p.surgeBonus = 0;
+    }
+    // 弹射连击：击碎方块后 3 秒内的伤害加成（3 秒内未续上则清零）
+    if (b && p.comboPower > 0) {
+        dmg += p.comboPower;
     }
     return dmg;
 }
@@ -310,8 +503,8 @@ export function updateBalls() {
             continue;
         }
 
-        // 祭坛诅咒：球速 +10%
-        const speedMul = (p.altarSpeedP || 1) * dt;
+        // 祭坛诅咒：球速 +10%；狂澜方块：球速 +8%
+        const speedMul = (p.altarSpeedP || 1) * dt * (state.frenzyTimer > 0 ? 1.08 : 1);
         b.x += b.vx * speedMul;
         b.y += b.vy * speedMul;
 
@@ -434,6 +627,8 @@ export function updateBalls() {
                     spawnParticles(minion.x, minion.y, PAL.moss3, 12);
                     const idx = state.boss.minions.indexOf(minion);
                     if (idx >= 0) state.boss.minions.splice(idx, 1);
+                    // 召唤物受方块类奖励影响，但跳过吸血/加血类奖励
+                    killHooks(minion.x, minion.y, { minion: true });
                     if (state.boss) {
                         state.boss.hp -= 10;
                         state.boss.flash = 1;
@@ -503,6 +698,8 @@ export function updateBalls() {
                             spawnParticles(al.x, al.y, PAL.vio2, 15);
                             bo.altars.splice(k, 1);
                             spawnFloatingText(al.x, al.y - 20, "祭坛摧毁！", PAL.vio2);
+                            // 祭坛受方块类奖励影响，但跳过吸血/加血类奖励
+                            killHooks(al.x, al.y, { altar: true });
                         }
                     }
                 }
@@ -539,6 +736,27 @@ export function updateBalls() {
             const overlapX = b.radius + bl.w / 2 - Math.abs(b.x - (bl.x + bl.w / 2));
             const overlapY = b.radius + bl.h / 2 - Math.abs(b.y - (bl.y + bl.h / 2));
 
+            // 重甲装甲：完全抵挡一次攻击（护甲不扣血，本次攻击无效）
+            if (bl.armorLeft > 0) {
+                bl.armorLeft--;
+                const acx = bl.x + bl.w / 2;
+                const acy = bl.y + bl.h / 2;
+                spawnParticles(acx, acy, PAL.stone3, 8);
+                spawnRing(acx, acy, PAL.mist1);
+                spawnFloatingText(acx, acy - 10, "装甲抵挡！", PAL.mist1);
+                if (!ghost) {
+                    if (overlapX < overlapY) {
+                        b.vx = -b.vx;
+                        b.x += (b.vx > 0 ? 1 : -1) * (overlapX + 1);
+                    } else {
+                        b.vy = -b.vy;
+                        b.y += (b.vy > 0 ? 1 : -1) * (overlapY + 1);
+                    }
+                }
+                playBlockHit();
+                break;
+            }
+
             const dmg = ballDamageOf(b);
             // 弱点打击：对满血方块额外伤害
             if (p.weakpointDmg > 0 && bl.hp >= bl.maxHp) {
@@ -560,17 +778,9 @@ export function updateBalls() {
             }
 
             if (bl.hp <= 0) {
-                const ci = Math.min(bl.maxHp - 1, 3);
-                const col = COLORS.blockColors[ci];
                 const cx = bl.x + bl.w / 2;
                 const cy = bl.y + bl.h / 2;
-                spawnParticles(cx, cy, col, 10 + bl.maxHp * 3);
-                spawnRing(cx, cy, COLORS.blockGlow[ci]);
-                spawnFloatingText(cx, cy - 6, `+${bl.maxHp * 10}`);
-                screenShake(5, 100);
-                hitStop(2);
-                playBlockBreak();
-                addScore(bl.maxHp * 100);
+                destroyBlock(bl, cx, cy, { byBall: true });
                 // 每击碎 N 个方块生成一个新球，有分裂之球时 N=5 且取代默认 10 格机制
                 const splitInterval = state.player.perks.split_ball ? 5 : 10;
                 state.breakCounter = (state.breakCounter || 0) + 1;
@@ -580,14 +790,12 @@ export function updateBalls() {
                     state.balls.push(nb);
                     spawnFloatingText(cx, cy - 24, "分裂！", PAL.gold3);
                 }
-                blocks.splice(j, 1);
 
-                postBreakHooks(cx, cy, bl);
                 onBallHits(b, cx);
 
                 if (!ghost) {
-                    if (p.perks.bouncy_combo) {
-                        // 弹射连击：不反弹
+                    if (bl.bounce) {
+                        extremeBounce(b, overlapX < overlapY ? "x" : "y");
                     } else if (b.piercingLeft > 0) {
                         b.piercingLeft--;
                     } else {
@@ -601,7 +809,16 @@ export function updateBalls() {
             } else {
                 // Block survived
                 if (!ghost) {
-                    if (overlapX < overlapY) {
+                    if (bl.bounce) {
+                        // 弹射方块：即使未击碎也以极端角度反弹
+                        const dir = overlapX < overlapY ? "x" : "y";
+                        if (dir === "x") {
+                            b.x += (b.vx > 0 ? 1 : -1) * (overlapX + 1);
+                        } else {
+                            b.y += (b.vy > 0 ? 1 : -1) * (overlapY + 1);
+                        }
+                        extremeBounce(b, dir);
+                    } else if (overlapX < overlapY) {
                         b.vx = -b.vx;
                         b.x += (b.vx > 0 ? 1 : -1) * (overlapX + 1);
                     } else {
@@ -614,6 +831,14 @@ export function updateBalls() {
                 onBallHits(b, bl.x + bl.w / 2);
             }
             break;
+        }
+
+        // 确保球有足够的纵向分量，防止横向卡死
+        const spd = Math.hypot(b.vx, b.vy);
+        if (b.launched && spd > 0.1 && Math.abs(b.vy) < spd * 0.25) {
+            const vySign = b.vy >= 0 ? 1 : -1;
+            b.vy = vySign * spd * 0.25;
+            b.vx = Math.sign(b.vx) * Math.sqrt(Math.max(0, spd * spd - b.vy * b.vy));
         }
     }
 }
@@ -628,6 +853,18 @@ function bounceSide(b, bl) {
         b.vy = -b.vy;
         b.y += (b.vy > 0 ? 1 : -1) * (overlapY + 1);
     }
+}
+
+// 弹射方块：先按命中面翻转向量，再把弹道压到极端竖直角（约 60°），
+// 确定性规则而非随机偏差，保证玩家仍可预判落点。
+function extremeBounce(b, dir) {
+    if (dir === "x") b.vx = -b.vx;
+    else b.vy = -b.vy;
+    const spd = Math.max(1, Math.hypot(b.vx, b.vy));
+    const vyMag = spd * 0.87;
+    const vxMag = Math.sqrt(Math.max(0, spd * spd - vyMag * vyMag));
+    b.vy = (b.vy >= 0 ? 1 : -1) * vyMag;
+    b.vx = (b.vx >= 0 ? 1 : -1) * vxMag;
 }
 
 // 毒雾判定：球心进入毒区就中毒。
