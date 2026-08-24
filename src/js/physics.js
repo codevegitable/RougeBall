@@ -1,4 +1,4 @@
-import { W, H, COLORS, MAX_BALLS, BALL_BASE_SPEED, PADDLE_BASE_W, BALL_BLOCK_ACCEL, BALL_SPEED_CAP, STATE, RARITY } from "./constants.js";
+import { W, H, COLORS, MAX_BALLS, BALL_BASE_SPEED, BALL_RADIUS, PADDLE_BASE_W, BALL_BLOCK_ACCEL, BALL_SPEED_CAP, STATE, RARITY } from "./constants.js";
 import { state, addScore, loseLife } from "./state.js";
 import { spawnParticles } from "./particles.js";
 import { screenShake, hitStop, flashPaddle, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
@@ -16,6 +16,7 @@ import {
 } from "./sound.js";
 import { PAL } from "./palette.js";
 import { FIELD_TOP } from "./layout.js";
+import { SPECIALS, SPLITTER_BLOCK } from "./data/levels.js";
 
 // 挡板实际受击区域（加宽翼不参与弹幕受击，受击长度固定为 PADDLE_BASE_W + 诅咒惩罚）
 export function paddleHitRect() {
@@ -128,13 +129,39 @@ function damageBlock(bl, dmg) {
     if (bl.indestructible) return;
     const cx = bl.x + bl.w / 2;
     const cy = bl.y + bl.h / 2;
-    if (bl.armorLeft > 0) {
-        // 装甲抵挡：完全无效化本次伤害（任意数值）
-        bl.armorLeft--;
-        spawnParticles(cx, cy, PAL.stone3, 6);
-        spawnRing(cx, cy, PAL.mist1);
+
+    // 屏障方块：前N次攻击只破盾，不扣血
+    if (bl.shieldLeft > 0) {
+        bl.shieldLeft--;
+        spawnParticles(cx, cy, PAL.arc3, 8);
+        spawnRing(cx, cy, PAL.arc3);
+        spawnFloatingText(cx, cy - 10, `护盾 -1`, PAL.arc3);
         return;
     }
+
+    // 装甲抵挡：Lv30+改为固定伤害吸收
+    if (bl.armorLeft > 0) {
+        if (bl.armorAbsorbMode) {
+            // 伤害吸收模式（Lv30+）
+            const absorbed = Math.min(dmg, bl.armorAbsorb);
+            bl.armorAbsorb -= absorbed;
+            dmg -= absorbed;
+            spawnParticles(cx, cy, PAL.stone3, 4);
+            spawnFloatingText(cx, cy - 10, `-${absorbed}`, PAL.stone3);
+            if (bl.armorAbsorb <= 0) {
+                bl.armorLeft = 0;
+                spawnRing(cx, cy, PAL.mist1);
+            }
+            if (dmg <= 0) return;
+        } else {
+            // 旧模式：完全无效化本次伤害
+            bl.armorLeft--;
+            spawnParticles(cx, cy, PAL.stone3, 6);
+            spawnRing(cx, cy, PAL.mist1);
+            return;
+        }
+    }
+
     bl.hp -= dmg;
     if (bl.hp <= 0) {
         destroyBlock(bl, cx, cy, { byBall: false });
@@ -170,6 +197,12 @@ function destroyBlock(bl, cx, cy, opts = {}) {
     if (bl.assimilate) assimilateBlockEffect(cx, cy);
     if (bl.aegis) aegisBlockEffect(cx, cy);
     if (bl.frenzy) frenzyBlockEffect(cx, cy);
+    if (bl.splitter) splitterBlockEffect(cx, cy, bl);
+    if (bl.chain) chainBlockEffect(cx, cy, bl);
+    if (bl.power) powerBlockEffect(cx, cy);
+    if (bl.spread) spreadBlockEffect(cx, cy, bl);
+    if (bl.momentum) momentumBlockEffect(cx, cy);
+    if (bl.impact && opts.byBall) impactBlockEffect(cx, cy, bl);
 
     killHooks(cx, cy, { block: bl });
 }
@@ -195,11 +228,12 @@ function explodeNeighbors(bl) {
     }
 }
 
-// 治疗方块：击碎恢复 0.1 条命（受治疗效果减益影响）
+// 治疗方块：击碎恢复 0.5 条命（受治疗效果减益影响）
 function healBlockEffect(cx, cy) {
     const p = state.player;
-    p.lives += 0.1 * (p.healMul || 1);
-    spawnFloatingText(cx, cy - 10, "生命 +0.1", PAL.moss3);
+    const healAmount = SPECIALS.heal.healAmount * (p.healMul || 1);
+    p.lives += healAmount;
+    spawnFloatingText(cx, cy - 10, `生命 +${healAmount.toFixed(1)}`, PAL.moss3);
     playHeal();
 }
 
@@ -287,6 +321,142 @@ function frenzyBlockEffect(cx, cy) {
     spawnFloatingText(cx, cy - 10, "狂澜 3 秒！", PAL.ember3);
     spawnParticles(cx, cy, PAL.ember2, 14);
     playHeal();
+}
+
+// ═══ 新增特殊方块效果 ═══
+
+// 分裂方块：击碎后生成小球，数量根据方块原始HP决定
+function splitterBlockEffect(cx, cy, bl) {
+    const originalHp = bl.originalHp || bl.maxHp;
+    const ballCount = SPLITTER_BLOCK.ballsByHp[Math.min(originalHp, 5)] || 3;
+    const p = state.player;
+    const maxAllowed = MAX_BALLS - (p.curseMaxBallsPenalty || 0);
+
+    let spawned = 0;
+    for (let i = 0; i < ballCount; i++) {
+        if (state.balls.length >= maxAllowed) break;
+        const angle = (Math.PI * 2 * i) / ballCount + Math.random() * 0.3;
+        const speed = BALL_BASE_SPEED * p.ballSpeedMul * 0.85;
+        state.balls.push({
+            x: cx,
+            y: cy,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            speed: speed,
+            radius: BALL_RADIUS * p.ballRadiusMul
+                * (state.powerBlockTimer > 0 ? SPECIALS.power.sizeMultiplier : 1),
+            launched: true,
+            piercingLeft: p.maxPiercing,
+            trail: [],
+            blockHits: 0,
+            poisonTimer: 0,
+            poisonImmune: 0,
+            isMain: false,
+        });
+        spawned++;
+    }
+
+    spawnFloatingText(cx, cy - 10, `分裂 +${spawned}球`, PAL.teal3);
+    spawnParticles(cx, cy, PAL.teal2, 12);
+    spawnRing(cx, cy, PAL.teal3);
+    playEventGood();
+}
+
+// 连锁方块：闪电链连锁伤害周围方块
+function chainBlockEffect(cx, cy, bl) {
+    const maxChain = 5;
+    const chainDamage = 1;
+    const chainRadius = 150;
+
+    let current = { x: cx, y: cy };
+    let chained = 0;
+    const visited = new Set([bl]);
+
+    for (let i = 0; i < maxChain; i++) {
+        const candidates = state.blocks.filter(b => {
+            if (visited.has(b) || b.indestructible) return false;
+            const dx = b.x + b.w / 2 - current.x;
+            const dy = b.y + b.h / 2 - current.y;
+            return dx * dx + dy * dy <= chainRadius * chainRadius;
+        });
+
+        if (candidates.length === 0) break;
+
+        const target = candidates[Math.floor(Math.random() * candidates.length)];
+        visited.add(target);
+
+        const tx = target.x + target.w / 2;
+        const ty = target.y + target.h / 2;
+
+        // 视觉：闪电链粒子
+        spawnParticles((current.x + tx) / 2, (current.y + ty) / 2, PAL.arc3, 4);
+
+        damageBlock(target, chainDamage);
+        current = { x: tx, y: ty };
+        chained++;
+    }
+
+    if (chained > 0) {
+        spawnFloatingText(cx, cy - 10, `连锁 ×${chained}`, PAL.arc3);
+        screenShake(3, 80);
+    }
+}
+
+// 强化方块：球变大+伤害+1，持续8秒
+function powerBlockEffect(cx, cy) {
+    const wasActive = state.powerBlockTimer > 0;
+    state.powerBlockTimer = SPECIALS.power.buffDuration;
+    // 球变大：只在 buff 从无到有时放大一次，重复拾取只续时间不叠加体积
+    if (!wasActive) {
+        const base = BALL_RADIUS * state.player.ballRadiusMul;
+        for (const b of state.balls) b.radius = base * SPECIALS.power.sizeMultiplier;
+    }
+    const secs = Math.round(SPECIALS.power.buffDuration / 60);
+    spawnFloatingText(cx, cy - 10, `强化 ${secs}秒！`, PAL.gold3);
+    spawnParticles(cx, cy, PAL.gold2, 12);
+    playHeal();
+}
+
+// 扩散方块：3圈冲击波，逐圈伤害周围方块
+function spreadBlockEffect(cx, cy, bl) {
+    const waves = 3;
+    const waveDamage = 1;
+
+    for (let wave = 0; wave < waves; wave++) {
+        setTimeout(() => {
+            const radius = 80 + wave * 60;
+            spawnRing(cx, cy, wave === 0 ? PAL.ember2 : wave === 1 ? PAL.gold2 : PAL.arc3);
+
+            for (const target of state.blocks) {
+                if (target.indestructible) continue;
+                const dx = target.x + target.w / 2 - cx;
+                const dy = target.y + target.h / 2 - cy;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > radius - 30 && dist < radius + 30) {
+                    damageBlock(target, waveDamage);
+                }
+            }
+        }, wave * 300);
+    }
+
+    spawnFloatingText(cx, cy - 10, `扩散 ${waves}圈`, PAL.ember3);
+    screenShake(4, 100);
+}
+
+// 加速方块：球速+30%，持续6秒，每次击中方块延长0.5秒
+function momentumBlockEffect(cx, cy) {
+    state.momentumTimer = SPECIALS.momentum.duration;
+    const secs = Math.round(SPECIALS.momentum.duration / 60);
+    spawnFloatingText(cx, cy - 10, `加速 ${secs}秒！`, PAL.vio3);
+    spawnParticles(cx, cy, PAL.vio2, 12);
+    playHeal();
+}
+
+// 重击方块：高速球双倍伤害，额外金币
+function impactBlockEffect(cx, cy, bl) {
+    addScore(300);
+    spawnFloatingText(cx, cy - 10, "重击奖励！", PAL.gold3);
+    spawnParticles(cx, cy, PAL.gold3, 16);
 }
 
 function blocksNear(cx, cy, radius) {
@@ -443,6 +613,8 @@ export function ballDamageOf(b) {
     let dmg = p.ballDamage * (p.strikeTimer > 0 ? 2 : 1);
     // 狂澜方块：所有球伤害 +2
     if (state.frenzyTimer > 0) dmg += 2;
+    // 强化方块：所有球伤害 +1
+    if (state.powerBlockTimer > 0) dmg += SPECIALS.power.damagePlus;
     if (b && b.poisonTimer > 0) dmg = Math.max(1, Math.floor(dmg * 0.75));
     // 精准打击：空中累积伤害加成，击中方块后由 onBallHits 重置
     if (b && p.precisionDmg > 0 && b.airFrames) {
@@ -480,7 +652,7 @@ export function updateBalls() {
         // 拖尾越清晰，预判落点越容易。
         b.trail.push({ x: b.x, y: b.y, life: 1 });
         b.trail = b.trail.filter((t) => {
-            t.life -= 0.045;
+            t.life -= 0.045 * state.dt;
             return t.life > 0;
         });
         if (b.trail.length > 20) b.trail.splice(0, b.trail.length - 20);
@@ -503,8 +675,10 @@ export function updateBalls() {
             continue;
         }
 
-        // 祭坛诅咒：球速 +10%；狂澜方块：球速 +8%
-        const speedMul = (p.altarSpeedP || 1) * dt * (state.frenzyTimer > 0 ? 1.08 : 1);
+        // 祭坛诅咒：球速 +10%；狂澜方块：球速 +8%；加速方块：球速 +30%
+        const speedMul = (p.altarSpeedP || 1) * dt
+            * (state.frenzyTimer > 0 ? 1.08 : 1)
+            * (state.momentumTimer > 0 ? SPECIALS.momentum.speedMultiplier : 1);
         b.x += b.vx * speedMul;
         b.y += b.vy * speedMul;
 
@@ -546,7 +720,7 @@ export function updateBalls() {
                 resetBallToPaddle(b);
                 continue;
             }
-            if (p.lifesaverLeft > 0) {
+            if (b.isMain && p.lifesaverLeft > 0) {
                 p.lifesaverLeft--;
                 resetBallToPaddle(b);
                 spawnFloatingText(W / 2, H / 2, "救生圈生效！", PAL.moss3);
@@ -736,28 +910,57 @@ export function updateBalls() {
             const overlapX = b.radius + bl.w / 2 - Math.abs(b.x - (bl.x + bl.w / 2));
             const overlapY = b.radius + bl.h / 2 - Math.abs(b.y - (bl.y + bl.h / 2));
 
-            // 重甲装甲：完全抵挡一次攻击（护甲不扣血，本次攻击无效）
+            // 重甲装甲：Lv30+改为固定伤害吸收
+            let dmg = ballDamageOf(b);
             if (bl.armorLeft > 0) {
-                bl.armorLeft--;
-                const acx = bl.x + bl.w / 2;
-                const acy = bl.y + bl.h / 2;
-                spawnParticles(acx, acy, PAL.stone3, 8);
-                spawnRing(acx, acy, PAL.mist1);
-                spawnFloatingText(acx, acy - 10, "装甲抵挡！", PAL.mist1);
-                if (!ghost) {
-                    if (overlapX < overlapY) {
-                        b.vx = -b.vx;
-                        b.x += (b.vx > 0 ? 1 : -1) * (overlapX + 1);
-                    } else {
-                        b.vy = -b.vy;
-                        b.y += (b.vy > 0 ? 1 : -1) * (overlapY + 1);
+                if (bl.armorAbsorbMode) {
+                    // 伤害吸收模式（Lv30+）
+                    const acx = bl.x + bl.w / 2;
+                    const acy = bl.y + bl.h / 2;
+                    const absorbed = Math.min(dmg, bl.armorAbsorb);
+                    bl.armorAbsorb -= absorbed;
+                    dmg = Math.max(0, dmg - absorbed);
+                    spawnParticles(acx, acy, PAL.stone3, 4);
+                    spawnFloatingText(acx, acy - 10, `-${absorbed}`, PAL.stone3);
+                    if (bl.armorAbsorb <= 0) {
+                        bl.armorLeft = 0;
+                        spawnRing(acx, acy, PAL.mist1);
                     }
+                    // 如果伤害被完全吸收，反弹后退出
+                    if (dmg === 0) {
+                        if (!ghost) {
+                            if (overlapX < overlapY) {
+                                b.vx = -b.vx;
+                                b.x += (b.vx > 0 ? 1 : -1) * (overlapX + 1);
+                            } else {
+                                b.vy = -b.vy;
+                                b.y += (b.vy > 0 ? 1 : -1) * (overlapY + 1);
+                            }
+                        }
+                        playBlockHit();
+                        break;
+                    }
+                } else {
+                    // 旧模式：完全无效化本次伤害
+                    bl.armorLeft--;
+                    const acx = bl.x + bl.w / 2;
+                    const acy = bl.y + bl.h / 2;
+                    spawnParticles(acx, acy, PAL.stone3, 8);
+                    spawnRing(acx, acy, PAL.mist1);
+                    spawnFloatingText(acx, acy - 10, "装甲抵挡！", PAL.mist1);
+                    if (!ghost) {
+                        if (overlapX < overlapY) {
+                            b.vx = -b.vx;
+                            b.x += (b.vx > 0 ? 1 : -1) * (overlapX + 1);
+                        } else {
+                            b.vy = -b.vy;
+                            b.y += (b.vy > 0 ? 1 : -1) * (overlapY + 1);
+                        }
+                    }
+                    playBlockHit();
+                    break;
                 }
-                playBlockHit();
-                break;
             }
-
-            const dmg = ballDamageOf(b);
             // 弱点打击：对满血方块额外伤害
             if (p.weakpointDmg > 0 && bl.hp >= bl.maxHp) {
                 bl.hp -= p.weakpointDmg;
@@ -781,15 +984,6 @@ export function updateBalls() {
                 const cx = bl.x + bl.w / 2;
                 const cy = bl.y + bl.h / 2;
                 destroyBlock(bl, cx, cy, { byBall: true });
-                // 每击碎 N 个方块生成一个新球，有分裂之球时 N=5 且取代默认 10 格机制
-                const splitInterval = state.player.perks.split_ball ? 5 : 10;
-                state.breakCounter = (state.breakCounter || 0) + 1;
-                if (state.breakCounter % splitInterval === 0 && state.balls.length < MAX_BALLS) {
-                    const nb = { ...b, isMain: false, trail: [] };
-                    nb.vy = -Math.abs(nb.vy);
-                    state.balls.push(nb);
-                    spawnFloatingText(cx, cy - 24, "分裂！", PAL.gold3);
-                }
 
                 onBallHits(b, cx);
 

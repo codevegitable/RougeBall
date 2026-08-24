@@ -12,9 +12,9 @@ export const COLORS = {
     paddle2: PAL.vio2,
     ball: PAL.bone1,
     ballGlow: PAL.gold2,
-    // 1HP → 6HP，后两档（秘蓝 / 暖金）留给高血量特殊方块（如治疗方块 8HP）
-    blockColors: [PAL.moss2, PAL.ember2, PAL.blood2, PAL.vio2, PAL.arc2, PAL.gold2],
-    blockGlow: [PAL.moss3, PAL.ember3, PAL.blood3, PAL.vio3, PAL.arc3, PAL.gold3],
+    // 1HP → 7HP，配色需要7档
+    blockColors: [PAL.moss2, PAL.ember2, PAL.blood2, PAL.vio2, PAL.arc2, PAL.gold2, PAL.teal3],
+    blockGlow: [PAL.moss3, PAL.ember3, PAL.blood3, PAL.vio3, PAL.arc3, PAL.gold3, PAL.teal3],
     unbreakable: PAL.mist0,
     ui: PAL.bone0,
     uiDim: PAL.mist0,

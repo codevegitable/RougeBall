@@ -8,7 +8,7 @@ import { state } from "./state.js";
 import { ctx } from "./canvas.js";
 import { PAL, RARITY_PAL } from "./palette.js";
 import {
-    PX, snap, pRect, pStroke, pText, pTextShadow, pSprite,
+    PX, snap, pRect, pStroke, pText, pTextShadow, pSprite, pFont,
     SPR_HEART, SPR_HALF_HEART, heartMap,
 } from "./pixel.js";
 import {
@@ -50,7 +50,26 @@ function drawTopBar() {
         const color = state.levelTimerStarted
             ? (seconds <= 10 ? PAL.blood3 : PAL.mist1)
             : PAL.stone3;
-        pTextShadow(`${seconds}s`, W / 2, 32, color, { size: 18, bold: true, align: "center" });
+        const timeStr = `${seconds}s`;
+        const target = state.levelTimerTarget || 0;
+        if (target > 0) {
+            // 计时器右对齐到中线左侧、进度左对齐到中线右侧，中间放一根竖分隔线。
+            // 用对齐方式而不是"量宽度再算起点"来定位：秒数位数会变（3 位→2 位→1 位），
+            // 靠测量拼接会让两段文字在数字跳变时互相挤压甚至重叠。
+            const breakable = state.blocks.filter((b) => !b.indestructible && !b.bonusOnly).length;
+            const broke = Math.max(0, Math.min(target, state.levelTimerTotal - breakable));
+            const done = broke >= target;
+            const GAP = 9; // 中线到两侧文字的间距
+            pTextShadow(timeStr, W / 2 - GAP, 32, color, { size: 18, bold: true, align: "right" });
+            pRect(W / 2 - PX, 18, PX, 16, PAL.ink3);
+            pTextShadow(
+                `${broke}/${target}`, W / 2 + GAP, 32,
+                done ? PAL.moss3 : PAL.mist0,
+                { size: 15, bold: true, align: "left" }
+            );
+        } else {
+            pTextShadow(timeStr, W / 2, 32, color, { size: 18, bold: true, align: "center" });
+        }
     } else {
         // 无计时器时分数居中显示
         pText(`${Math.floor(p.score / 10)}`, W / 2, 31, PAL.bone1, { size: 20, bold: true, align: "center" });
@@ -64,9 +83,11 @@ function drawTopBar() {
     pTextShadow("ESC", W - 14, 40, PAL.stone3, { size: 10, align: "right" });
 }
 
-function measure(text, size) {
+// 用 pFont 设置字体后再量，否则量出来的宽度和实际画出来的不一致：
+// pFont 走 FONT_STACK 且把字号取整到 PX 的偶数倍，和 "bold Npx monospace" 差得不少。
+function measure(text, size, bold = true) {
     ctx.save();
-    ctx.font = `bold ${size}px monospace`;
+    pFont(size, bold);
     const w = ctx.measureText(text).width;
     ctx.restore();
     return w;
@@ -176,6 +197,8 @@ function drawStatusChips() {
     if (p.shieldTimer > 0) chips.push({ label: "护盾", color: PAL.arc3, icon: "shield" });
     if (state.aegisTimer > 0) chips.push({ label: "圣盾", color: PAL.gold3, icon: "shield" });
     if (state.frenzyTimer > 0) chips.push({ label: "狂澜", color: PAL.ember3, icon: "fire" });
+    if (state.powerBlockTimer > 0) chips.push({ label: "强化", color: PAL.gold3, icon: "star" });
+    if (state.momentumTimer > 0) chips.push({ label: "加速", color: PAL.vio3, icon: "charge" });
     if (p.freezeTimer > 0) chips.push({ label: "冻结", color: PAL.teal2, icon: "freeze" });
     if (state.bulletFreezeTimer > 0) chips.push({ label: "弹冻", color: PAL.teal2, icon: "freeze" });
     if ((p.comboPower || 0) > 0) chips.push({ label: `连击+${p.comboPower}`, color: PAL.gold3, icon: "star" });

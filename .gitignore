@@ -5,3 +5,6 @@ dist/
 .claude/
 .audit/
 boss.md
+
+*.tar.gz
+*.zip

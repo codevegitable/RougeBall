@@ -66,26 +66,26 @@ export function spawnFloatingText(x, y, text, color = PAL.gold2) {
 
 export function updateEffects() {
     if (state.shakeTime > 0) {
-        state.shakeTime = Math.max(0, state.shakeTime - FRAME_MS);
+        state.shakeTime = Math.max(0, state.shakeTime - FRAME_MS * state.dt);
     }
 
     for (let i = state.rings.length - 1; i >= 0; i--) {
         const r = state.rings[i];
-        r.r += 3;
-        r.life -= 0.06;
+        r.r += 3 * state.dt;
+        r.life -= 0.06 * state.dt;
         if (r.life <= 0) state.rings.splice(i, 1);
     }
 
     for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
         const t = state.floatingTexts[i];
         t.y += t.vy;
-        t.vy *= 0.96;
-        t.life -= 0.02;
+        t.vy *= Math.pow(0.96, state.dt);
+        t.life -= 0.02 * state.dt;
         if (t.life <= 0) state.floatingTexts.splice(i, 1);
     }
 
     if (state.paddle && state.paddle.flash > 0) {
-        state.paddle.flash = Math.max(0, state.paddle.flash - 0.1);
+        state.paddle.flash = Math.max(0, state.paddle.flash - 0.1 * state.dt);
     }
 }
 

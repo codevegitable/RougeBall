@@ -4,7 +4,7 @@ import { state } from "./state.js";
 import { PAL } from "./palette.js";
 import { spawnParticles } from "./particles.js";
 import { spawnRing, spawnFloatingText } from "./fx.js";
-import { BLOCK_SIZE_TABLE, HP_TABLE, HP_TIER, ARMORED, BLOCK_COUNT, SPECIALS, BENEFIT_BLOCK, BENEFIT_SPAWN } from "./data/levels.js";
+import { BLOCK_SIZE_TABLE, HP_TABLE, HP_TIER, ARMORED, BLOCK_COUNT, SPECIALS, ELITE_BLOCK, SPLITTER_BLOCK, BENEFIT_BLOCK, BENEFIT_SPAWN } from "./data/levels.js";
 
 // 方块尺寸随关卡递减（查表）
 function blockSizeFor(level) {
@@ -130,7 +130,17 @@ export function createBlocksFromGrid(grid, num = 1) {
         )
         : 0;
 
+    // 精英方块概率
+    const eliteChance = num >= ELITE_BLOCK.minLevel
+        ? Math.min(
+            ELITE_BLOCK.baseChance + (num - ELITE_BLOCK.minLevel) * ELITE_BLOCK.perLevel,
+            ELITE_BLOCK.maxChance
+        )
+        : 0;
+
     const bl = [];
+    const splitterCandidates = []; // 用于后续强制转换为分裂方块
+
     for (let row = 0; row < grid.length; row++) {
         for (let col = 0; col < grid[row].length; col++) {
             const type = grid[row][col];
@@ -142,23 +152,75 @@ export function createBlocksFromGrid(grid, num = 1) {
             const moving = !indestructible && rng() < movingChance
                 ? { phase: rng() * Math.PI * 2, speed: 0.010 + rng() * 0.012, amp: 26 + rng() * 40 }
                 : null;
-            // 重甲砖：带 1 层装甲，可完全抵挡一次攻击。不与移动方块叠加，避免"追着打又打不烂"
+            // 重甲砖：带装甲，可抵挡攻击。不与移动方块叠加
             const armored = !indestructible && !moving && rng() < armoredChance;
+
+            // 精英方块：血量×2.5，不与不可摧毁/移动叠加
+            const elite = !indestructible && !moving && rng() < eliteChance;
+
             // 特殊方块：可叠加在普通/移动/重甲方块上（互相排斥，每种方块只能有一种特殊）
             const special = !indestructible ? rollSpecial(rng, num) : null;
             const hpBonus = (state.player.curseBlockHpBonus || 0);
-            const totalHp = special === "heal" ? SPECIALS.heal.hp : type + hpBonus;
 
-            bl.push({
-                x, y, baseX: x, baseY: y, w: bw, h: bh,
+            let totalHp = type + hpBonus;
+            let finalW = bw;
+            let finalH = bh;
+
+            // 特殊方块HP处理
+            if (special === "heal") {
+                totalHp = SPECIALS.heal.hp;
+            } else if (special === "impact") {
+                totalHp = SPECIALS.impact.hp;
+            } else if (elite) {
+                totalHp = Math.round(totalHp * ELITE_BLOCK.hpMultiplier);
+                finalW = Math.round(bw * ELITE_BLOCK.sizeMultiplier);
+                finalH = Math.round(bh * ELITE_BLOCK.sizeMultiplier);
+            }
+
+            const block = {
+                x, y, baseX: x, baseY: y, w: finalW, h: finalH,
                 hp: indestructible ? Infinity : totalHp,
                 maxHp: totalHp,
+                originalHp: type,  // 保存原始HP，用于分裂方块生成球数
                 indestructible, moving, armored,
                 armorLeft: armored ? ARMORED.absorb : 0,
+                // Lv30+装甲改为伤害吸收模式
+                armorAbsorbMode: armored && num >= ARMORED.absorbDamageLevel,
+                armorAbsorb: armored && num >= ARMORED.absorbDamageLevel
+                    ? (num >= ARMORED.absorbDamageHighLevel ? ARMORED.absorbDamageHigh : ARMORED.absorbDamage)
+                    : 0,
+                elite,
                 explosive: special === "explosive",
                 heal: special === "heal",
                 bounce: special === "bounce",
-            });
+                chain: special === "chain",
+                power: special === "power",
+                spread: special === "spread",
+                momentum: special === "momentum",
+                impact: special === "impact",
+            };
+
+            bl.push(block);
+
+            // 收集候选分裂方块（非不可摧毁、非特殊方块）
+            if (!indestructible && !special && !elite && num >= SPLITTER_BLOCK.minLevel) {
+                splitterCandidates.push(block);
+            }
+        }
+    }
+
+    // 强制生成分裂方块（Lv4+），数量随关卡提升递增
+    if (num >= SPLITTER_BLOCK.minLevel && splitterCandidates.length > 0) {
+        const extra = Math.floor((num - SPLITTER_BLOCK.minLevel) / 8);
+        const count = Math.min(SPLITTER_BLOCK.minCount + extra + Math.floor(rng() * (SPLITTER_BLOCK.maxCount - SPLITTER_BLOCK.minCount + 1)), splitterCandidates.length);
+        const selected = [];
+        for (let i = 0; i < Math.min(count, splitterCandidates.length); i++) {
+            const idx = Math.floor(rng() * splitterCandidates.length);
+            selected.push(splitterCandidates[idx]);
+            splitterCandidates.splice(idx, 1);
+        }
+        for (const block of selected) {
+            block.splitter = true;
         }
     }
 
@@ -180,9 +242,12 @@ function rollSpecial(rng, num) {
         entries.push([id, def.chance]);
         total += def.chance;
     }
+    if (total === 0) return null;
     const roll = rng() * total;
+    let acc = 0;
     for (const [id, w] of entries) {
-        if (roll < w) return id;
+        acc += w;
+        if (roll < acc) return id;
     }
     return null;
 }
@@ -203,8 +268,12 @@ function makeRewardBlock(existing, cols, bw, bh, gap, startX, num) {
         return {
             x, y, baseX: x, baseY: y, w: bw, h: bh,
             hp: SPECIALS.reward.hp, maxHp: SPECIALS.reward.hp,
+            originalHp: SPECIALS.reward.hp,
             indestructible: false, moving: null, armored: false, armorLeft: 0,
+            armorAbsorbMode: false, armorAbsorb: 0,
+            elite: false,
             explosive: false, heal: false, bounce: false,
+            chain: false, power: false, spread: false, momentum: false, impact: false, splitter: false,
             reward: true, bonusOnly: true,
             expireAt: state.time + SPECIALS.reward.life,
         };
@@ -231,8 +300,13 @@ export function createBenefitBlocks(level) {
             blocks.push({
                 x, y, baseX: x, baseY: y, w: def.w, h: def.h,
                 hp: def.hp, maxHp: def.hp,
+                originalHp: def.hp,
                 indestructible: false, moving: null, armored: false, armorLeft: 0,
-                explosive: false, heal: false, bounce: false, reward: false,
+                armorAbsorbMode: false, armorAbsorb: 0,
+                elite: false,
+                explosive: false, heal: false, bounce: false,
+                chain: false, power: false, spread: false, momentum: false, impact: false, splitter: false,
+                reward: false,
                 freeze: true, bonusOnly: true,
                 expireAt: state.time + def.life,
             });
@@ -280,7 +354,7 @@ function tryPlaceBenefitBlock(def) {
 }
 
 export function updateBenefitSpawns() {
-    state.benefitWaveTimer--;
+    state.benefitWaveTimer -= state.dt;
     if (state.benefitWaveTimer > 0) return;
     state.benefitWaveTimer =
         BENEFIT_SPAWN.minInterval + Math.random() * (BENEFIT_SPAWN.maxInterval - BENEFIT_SPAWN.minInterval);
@@ -309,8 +383,12 @@ export function updateBenefitSpawns() {
         state.blocks.push({
             x: pos.x, y: pos.y, baseX: pos.x, baseY: pos.y, w: def.w, h: def.h,
             hp: def.hp, maxHp: def.hp,
+            originalHp: def.hp,
             indestructible: false, moving: null, armored: false, armorLeft: 0,
+            armorAbsorbMode: false, armorAbsorb: 0,
+            elite: false,
             explosive: false, heal: false, bounce: false, reward: false,
+            chain: false, power: false, spread: false, momentum: false, impact: false, splitter: false,
             ...flags, bonusOnly: true,
             expireAt: state.time + def.life,
         });

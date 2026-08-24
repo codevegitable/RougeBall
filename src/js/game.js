@@ -162,6 +162,13 @@ export function resetBall() {
             isMain: true,
         },
     ];
+    // 开局额外球：双球开局/祝福开局
+    if (state.player.startBalls > 1) {
+        spawnExtraBalls(state.player.startBalls - 1);
+        for (const b of state.balls) {
+            if (!b.isMain) b.launched = false;
+        }
+    }
 }
 
 export function loadLevel(num, skipCurse = false) {
@@ -176,6 +183,8 @@ export function loadLevel(num, skipCurse = false) {
     state.bulletFreezeTimer = 0; // 冰冻方块效果不跨关
     state.aegisTimer = 0; // 圣盾方块效果不跨关
     state.frenzyTimer = 0; // 狂澜方块效果不跨关
+    state.powerBlockTimer = 0; // 强化方块效果不跨关
+    state.momentumTimer = 0; // 加速方块效果不跨关
     state.friendlyBullets = []; // 同化弹不跨关
     state.boss = null;
     state.bossBullets = [];
@@ -475,14 +484,13 @@ export function startBossFight() {
     state.bulletFreezeTimer = 0; // 冰冻方块效果不跨关
     state.aegisTimer = 0; // 圣盾方块效果不跨关
     state.frenzyTimer = 0; // 狂澜方块效果不跨关
+    state.powerBlockTimer = 0; // 强化方块效果不跨关
+    state.momentumTimer = 0; // 加速方块效果不跨关
     state.friendlyBullets = []; // 同化弹不跨关
     state.benefitWaveTimer = BENEFIT_SPAWN.firstAt; // 收益方块第一波：开局 8 秒后
     state.challenge = null;
     resetPaddle();
     resetBall();
-    if (state.player.startBalls > 1) {
-        spawnExtraBalls(state.player.startBalls - 1);
-    }
     state.gameState = STATE.PLAYING;
     if (state.player.entryBonus > 0) addScore(state.player.entryBonus);
     state.player._shieldGranted = 0; // 守卫核心：Boss 战重置
@@ -540,9 +548,6 @@ export function beginChallengeRun() {
     state.player.comboTimer = 0;
     resetPaddle();
     resetBall();
-    if (state.player.startBalls > 1) {
-        spawnExtraBalls(state.player.startBalls - 1);
-    }
     state.gameState = STATE.PLAYING;
     spawnFloatingText(400, 300, "限时挑战开始！", PAL.ember2);
     queueGuideOnce("challenge"); // 首次限时挑战时解释规则
@@ -582,10 +587,10 @@ function endChallenge(success, broke) {
         };
         spawnFloatingText(400, 260, "挑战成功！", PAL.moss3);
     } else {
-        loseLife(0.5);
+        // 时间到但未达成目标：强制进入下一关，不给奖励
         if (state.gameState === STATE.GAME_OVER) return;
         state.eventResult = {
-            text: `挑战失败！仅击破 ${broke}/${c.target} 个方块\n损失半条生命`,
+            text: `挑战失败！仅击破 ${broke}/${c.target} 个方块\n未获得奖励`,
             color: PAL.blood3,
         };
         spawnFloatingText(400, 260, "挑战失败", PAL.blood3);
@@ -647,8 +652,8 @@ export function launchBalls() {
 }
 
 export function tryUseSkill(index) {
-    // 普通关卡：主球未发射时不能使用技能
-    if (!state.boss && state.balls.every(b => !b.launched)) return;
+    // 主球未发射时不能使用技能
+    if (state.balls.every(b => !b.launched)) return;
     useSkillFromGame(index);
 }
 
@@ -661,13 +666,13 @@ export function update(ts = 0) {
     if (state.lastTs === 0) state.lastTs = ts;
     state.dt = Math.min(3, Math.max(0.05, (ts - state.lastTs) / 16.6667));
     state.lastTs = ts;
-    state.time++;
+    state.time += state.dt;
 
     tickTimers();
 
     // 顿帧：暂停物理，只更新特效
     if (state.freeze > 0) {
-        state.freeze--;
+        state.freeze = Math.max(0, state.freeze - state.dt);
         updateParticles();
         updateStars();
         return;
@@ -733,12 +738,24 @@ export function update(ts = 0) {
             const breakable = state.blocks.filter(b => !b.indestructible && !b.bonusOnly).length;
             const broke = state.levelTimerTotal - breakable;
             if (broke < state.levelTimerTarget) {
-                loseLife(0.5);
-                spawnFloatingText(W / 2, H / 2, "时间到！损失半条命", PAL.blood3);
+                // 时间到但未达成目标：强制进入下一关，不给奖励
+                spawnFloatingText(W / 2, H / 2, "时间到！未达成目标", PAL.blood3);
+                state.player.level++;
+                if (state.player.level > TOTAL_LEVELS) {
+                    state.gameState = STATE.VICTORY;
+                    playVictory();
+                    return;
+                }
+                if (isBossLevel(state.player.level)) {
+                    startBossFight();
+                } else {
+                    loadLevel(state.player.level);
+                }
+            } else {
+                // 达成目标：结束当前关卡，进入奖励选择
+                clearLevel();
+                return;
             }
-            // 重置计时器，继续挑战（时间公式与 loadLevel 一致）
-            const extraTime = 20 * (1 - Math.pow(0.92, state.player.level));
-            state.levelTimer = Math.round((45 + extraTime) * 60);
         }
     }
 
@@ -759,31 +776,41 @@ function ensureMainBall() {
 }
 
 function tickTimers() {
+    const dt = state.dt;
     const p = state.player;
-    p.ghostTimer = Math.max(0, p.ghostTimer - 1);
-    p.shieldTimer = Math.max(0, p.shieldTimer - 1);
-    p.strikeTimer = Math.max(0, p.strikeTimer - 1);
-    p.explosiveTimer = Math.max(0, p.explosiveTimer - 1);
-    p.freezeTimer = Math.max(0, p.freezeTimer - 1);
-    state.bulletFreezeTimer = Math.max(0, state.bulletFreezeTimer - 1);
-    state.aegisTimer = Math.max(0, state.aegisTimer - 1);
-    state.frenzyTimer = Math.max(0, state.frenzyTimer - 1);
-    state.invulnTimer = Math.max(0, state.invulnTimer - 1);
-    state.hurtTimer = Math.max(0, state.hurtTimer - 1);
+    p.ghostTimer = Math.max(0, p.ghostTimer - dt);
+    p.shieldTimer = Math.max(0, p.shieldTimer - dt);
+    p.strikeTimer = Math.max(0, p.strikeTimer - dt);
+    p.explosiveTimer = Math.max(0, p.explosiveTimer - dt);
+    p.freezeTimer = Math.max(0, p.freezeTimer - dt);
+    state.bulletFreezeTimer = Math.max(0, state.bulletFreezeTimer - dt);
+    state.aegisTimer = Math.max(0, state.aegisTimer - dt);
+    state.frenzyTimer = Math.max(0, state.frenzyTimer - dt);
+    // 强化方块：buff 结束的那一帧把球半径还原成基础值。
+    // 半径存在每个球上（生成时算一次），所以放大/还原都要显式改写，
+    // 不能像伤害那样在读取处乘系数。
+    const powerWas = state.powerBlockTimer;
+    state.powerBlockTimer = Math.max(0, state.powerBlockTimer - dt);
+    if (powerWas > 0 && state.powerBlockTimer === 0) {
+        for (const b of state.balls) b.radius = BALL_RADIUS * state.player.ballRadiusMul;
+    }
+    state.momentumTimer = Math.max(0, state.momentumTimer - dt);
+    state.invulnTimer = Math.max(0, state.invulnTimer - dt);
+    state.hurtTimer = Math.max(0, state.hurtTimer - dt);
     // 弹射连击：3 秒内未续上则力量清零
     if (p.comboTimer > 0) {
-        p.comboTimer--;
+        p.comboTimer -= dt;
         if (p.comboTimer <= 0) p.comboPower = 0;
     }
     // 皮肤技能：黄金祝福时效
     if (p._wealthTimer > 0) {
-        p._wealthTimer--;
+        p._wealthTimer -= dt;
         if (p._wealthTimer <= 0) { p.scoreMul = Math.max(1, p.scoreMul / 2); }
     }
     // 吸吮技能时效
-    if (p.siphonTimer > 0) p.siphonTimer = Math.max(0, p.siphonTimer - 1);
+    if (p.siphonTimer > 0) p.siphonTimer = Math.max(0, p.siphonTimer - dt);
     for (const s of p.skills) {
-        s.cd = Math.max(0, s.cd - 1);
+        s.cd = Math.max(0, s.cd - dt);
     }
     if (p.slowTill > 0 && state.time > p.slowTill) {
         restoreTimeScale();

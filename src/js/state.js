@@ -29,6 +29,8 @@ export const state = {
     benefitWaveTimer: 0, // Boss 战收益方块周期生成倒计时（帧）
     aegisTimer: 0, // 圣盾方块：挡板免疫弹幕剩余帧数
     frenzyTimer: 0, // 狂澜方块：球伤害 +2、球速 +8% 剩余帧数
+    powerBlockTimer: 0, // 强化方块：球变大 + 伤害 +1 剩余帧数
+    momentumTimer: 0, // 加速方块：球速 +30% 剩余帧数
     invulnTimer: 0, // 受击无敌帧
     hurtTimer: 0, // 受击红闪帧
     // 界面选择
@@ -87,7 +89,7 @@ export function loseLife(n = 1) {
         return;
     }
     p.lives = Math.max(0, p.lives - n);
-    if (p.lives <= 0) {
+    if (p.lives < 0.5) {
         state.gameState = STATE.GAME_OVER;
         playGameOver();
     }

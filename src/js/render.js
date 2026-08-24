@@ -305,6 +305,7 @@ export function drawBlocks() {
         if (bl.explosive) drawExplosiveMark(x, y, w, h);
         if (bl.bounce) drawBounceMark(x, y, w, h, tier);
         if (bl.reward) drawRewardMark(x, y, w, h);
+        if (bl.splitter) drawSplitterMark(x, y, w, h);
 
         // 移动方块：两侧箭头刻痕
         if (bl.moving) {
@@ -519,6 +520,25 @@ function drawRewardMark(x, y, w, h) {
     ctx.fillStyle = PAL.gold2;
     ctx.fillRect(mx - PX / 2, my - PX, PX, PX);
     ctx.fillRect(mx - PX, my - PX / 2, PX, PX);
+}
+
+// 分裂方块：青色斑点花纹，读作"碎了会分裂出小球"
+function drawSplitterMark(x, y, w, h) {
+    const mx = x + Math.round(w / 2 / PX) * PX;
+    const my = y + Math.round(h / 2 / PX) * PX;
+    const spots = [
+        [mx - PX * 2, my - PX * 2],
+        [mx + PX * 2, my - PX * 2],
+        [mx, my],
+        [mx - PX * 2, my + PX * 2],
+        [mx + PX * 2, my + PX * 2],
+    ];
+    for (const [sx, sy] of spots) {
+        ctx.fillStyle = PAL.teal2;
+        ctx.fillRect(sx, sy, PX, PX);
+        ctx.fillStyle = PAL.teal1;
+        ctx.fillRect(sx + PX / 2, sy + PX / 2, PX / 2, PX / 2);
+    }
 }
 
 // 裂纹：确定性伪随机，保证同一方块裂纹稳定不闪烁

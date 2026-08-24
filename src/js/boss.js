@@ -202,7 +202,7 @@ export function updateBoss() {
     if (!boss) return;
     if (state.player.freezeTimer > 0) return;
     const dt = state.dt;
-    boss.t++;
+    boss.t += dt;
     boss.flash = Math.max(0, boss.flash - 0.08 * dt);
     boss.hitCooldown = Math.max(0, boss.hitCooldown - dt);
 

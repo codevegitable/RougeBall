@@ -44,8 +44,8 @@ export function initStars() {
 
 export function updateStars() {
     for (const s of state.stars) {
-        s.sway += s.speed;
-        s.y += s.drift;
+        s.sway += s.speed * state.dt;
+        s.y += s.drift * state.dt;
         if (s.y > H) {
             s.y = FIELD_TOP;
             s.x = Math.random() * W;
