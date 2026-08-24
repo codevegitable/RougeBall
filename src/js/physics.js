@@ -275,16 +275,16 @@ function assimilateBlockEffect(cx, cy) {
 
 // 圣盾方块：5 秒内挡板免疫一切弹幕（Boss 冲撞/跳砸仍生效）
 function aegisBlockEffect(cx, cy) {
-    state.aegisTimer = 5 * 60;
-    spawnFloatingText(cx, cy - 10, "圣盾 5 秒！", PAL.gold3);
+    state.aegisTimer = 4 * 60;
+    spawnFloatingText(cx, cy - 10, "圣盾 4 秒！", PAL.gold3);
     spawnParticles(cx, cy, PAL.gold3, 14);
     playHeal();
 }
 
 // 狂澜方块：8 秒内所有球伤害 +2、球速 +8%
 function frenzyBlockEffect(cx, cy) {
-    state.frenzyTimer = 8 * 60;
-    spawnFloatingText(cx, cy - 10, "狂澜 8 秒！", PAL.ember3);
+    state.frenzyTimer = 3 * 60;
+    spawnFloatingText(cx, cy - 10, "狂澜 3 秒！", PAL.ember3);
     spawnParticles(cx, cy, PAL.ember2, 14);
     playHeal();
 }
