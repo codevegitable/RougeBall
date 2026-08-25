@@ -700,7 +700,7 @@ export function update(ts = 0) {
     // 限时挑战房
     if (state.challenge) {
         const c = state.challenge;
-        c.limit--;
+        c.limit -= state.dt;
         const breakable = state.blocks.filter((b) => !b.indestructible && !b.bonusOnly).length;
         const broke = c.initialBreakable - breakable;
         if (broke >= c.target) {
@@ -733,7 +733,7 @@ export function update(ts = 0) {
 
     // 普通关卡倒计时：主球（黄球）未发射前不计时
     if (state.levelTimer > 0 && state.levelTimerStarted) {
-        state.levelTimer--;
+        state.levelTimer -= state.dt;
         if (state.levelTimer <= 0) {
             const breakable = state.blocks.filter(b => !b.indestructible && !b.bonusOnly).length;
             const broke = state.levelTimerTotal - breakable;

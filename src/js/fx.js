@@ -78,7 +78,7 @@ export function updateEffects() {
 
     for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
         const t = state.floatingTexts[i];
-        t.y += t.vy;
+        t.y += t.vy * state.dt;
         t.vy *= Math.pow(0.96, state.dt);
         t.life -= 0.02 * state.dt;
         if (t.life <= 0) state.floatingTexts.splice(i, 1);

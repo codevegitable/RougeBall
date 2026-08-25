@@ -1306,7 +1306,7 @@ function updateBossBullets() {
 
     for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
-        b.age++;
+        b.age += dt;
 
         if (b.homing) {
             const cur = Math.atan2(b.vy, b.vx);

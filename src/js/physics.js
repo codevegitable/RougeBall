@@ -503,8 +503,8 @@ function killHooks(cx, cy, opts) {
             p._siphonSkillCounter = (p._siphonSkillCounter || 0) + 1;
             if (p._siphonSkillCounter >= 5) {
                 p._siphonSkillCounter = 0;
-                p.lives += 0.1 * (p.healMul || 1);
-                spawnFloatingText(cx, cy - 20, "生命 +0.1（技能）", PAL.blood3);
+                p.lives += 0.2 * (p.healMul || 1);
+                spawnFloatingText(cx, cy - 20, "生命 +0.2（技能）", PAL.blood3);
                 playHeal();
             }
         }

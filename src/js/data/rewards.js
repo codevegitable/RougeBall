@@ -26,25 +26,25 @@ export const REWARD_DATA = [
     { id: "slow_time", name: "时间缓速", icon: "⏳", rarity: "uncommon", type: "skill", cooldown: 30, desc: "8 秒内所有球速度 -40%" },
     // 图标改自 🌀：🌀 在 EMOJI_MAP 里映射到 curse 字形（迷眼/混沌引力两个诅咒共用它，
     // 对诅咒是对的），但这技能是挡板免疫，画成诅咒符号会和状态页的「诅咒」分页同图标。
-    { id: "energy_shield", name: "岿然不动", icon: "🛡️", rarity: "uncommon", type: "skill", cooldown: 30, desc: "8 秒内挡板免疫一切弹幕伤害" },
+    { id: "energy_shield", name: "岿然不动", icon: "🛡️", rarity: "uncommon", type: "skill", cooldown: 30, desc: "6 秒内挡板免疫一切弹幕伤害" },
     { id: "blast_charge", name: "爆裂蓄力", icon: "💥", rarity: "uncommon", type: "skill", cooldown: 25, desc: "接下来 5 秒内击碎方块时引发爆炸，波及周围方块" },
     // 🎇/🔆 都兜底到 star 字形，两个技能会长得一样。这里直接写字形名而非 emoji：
     // resolveIcon 对已知字形名原样返回，比挑一个"刚好映射对"的 emoji 更直白。
     { id: "barrage", name: "弹幕爆发", icon: "ball", rarity: "rare", type: "skill", cooldown: 35, desc: "立即额外发射 5 个球" },
     { id: "power_strike", name: "突破极限", icon: "charge", rarity: "rare", type: "skill", cooldown: 30, desc: "接下来 5 秒内球伤害 ×2" },
-    { id: "time_freeze", name: "时间冻结", icon: "🧊", rarity: "rare", type: "skill", cooldown: 40, desc: "4 秒内所有方块与 Boss 停止移动和攻击" },
+    { id: "time_freeze", name: "The World", icon: "🧊", rarity: "rare", type: "skill", cooldown: 40, desc: "4 秒内所有方块与 Boss 停止移动和攻击" },
     // ═══ 解锁技能 ═══
     // 皮肤技能原本用色块 emoji（🟢/🔴/🟡）表示阵营，但色块在 EMOJI_MAP 里按颜色
     // 映射成 shield/sword/coin，与技能实际效果无关：翡翠繁星是加球却画成盾、
     // 黄金之盾是无敌却画成金币。改为按效果取字形，阵营已由稀有度色条体现。
     { id: "jade_stars", name: "翡翠繁星", icon: "star", rarity: "uncommon", type: "skill", cooldown: 30, tierLock: 0, desc: "发射 3 个额外球" },
     { id: "jade_shield", name: "翡翠之盾", icon: "🛡️", rarity: "uncommon", type: "skill", cooldown: 35, tierLock: 0, desc: "6 秒内受击反弹 5 点伤害" },
-    { id: "crimson_storm", name: "猩红风暴", icon: "fire", rarity: "uncommon", type: "skill", cooldown: 30, tierLock: 1, desc: "5 秒内球分裂出 2 个额外球" },
-    { id: "blood_siphon", name: "血之吸吮", icon: "🩸", rarity: "uncommon", type: "skill", cooldown: 40, tierLock: 1, desc: "8 秒内每击碎 5 个方块回复 0.1 命" },
-    { id: "golden_shield", name: "黄金之盾", icon: "shield", rarity: "rare", type: "skill", cooldown: 40, tierLock: 2, desc: "6 秒内无敌" },
+    { id: "crimson_storm", name: "猩红风暴", icon: "fire", rarity: "uncommon", type: "skill", cooldown: 30, tierLock: 1, desc: "分裂出 2 个额外球" },
+    { id: "blood_siphon", name: "血之吸吮", icon: "🩸", rarity: "uncommon", type: "skill", cooldown: 10, tierLock: 1, desc: "8 秒内每击碎 5 个方块回复 0.2 命" },
+    { id: "golden_shield", name: "黄金之盾", icon: "shield", rarity: "rare", type: "skill", cooldown: 40, tierLock: 2, desc: "6 秒内受击不扣血" },
     { id: "wealth_rain", name: "王国资产", icon: "💰", rarity: "rare", type: "skill", cooldown: 30, tierLock: 2, desc: "立即获得 200 分" },
     // ═══ 皮肤开场技能 ═══
-    { id: "jade_barrier", name: "翡翠屏障", icon: "🟢", rarity: "uncommon", type: "skill", cooldown: 35, skinOnly: true, desc: "5 秒内受击不扣血" },
+    { id: "jade_barrier", name: "翡翠屏障", icon: "🟢", rarity: "uncommon", type: "skill", cooldown: 35, skinOnly: true, desc: "4 秒内受击不扣血" },
     { id: "swift_blade", name: "迅捷之刃", icon: "🔴", rarity: "uncommon", type: "skill", cooldown: 30, skinOnly: true, desc: "5 秒内球伤害 ×1.5" },
     { id: "golden_blessing", name: "黄金祝福", icon: "🟡", rarity: "uncommon", type: "skill", cooldown: 35, skinOnly: true, desc: "立即获得 50 分，8 秒内分数 ×2" },
     // ═══ 被动能力 ═══

@@ -23,7 +23,7 @@ const APPLY_EFFECTS = {
 const USE_EFFECTS = {
     ghost() { state.player.ghostTimer = 180; },
     slow_time() { applyTimeScale(0.6, 480); },
-    energy_shield() { state.player.shieldTimer = 480; },
+    energy_shield() { state.player.shieldTimer = 360; },
     blast_charge() { state.player.explosiveTimer = 300; },
     barrage() { spawnExtraBalls(5); },
     power_strike() { state.player.strikeTimer = 300; },
@@ -34,7 +34,7 @@ const USE_EFFECTS = {
     blood_siphon() { state.player.siphonTimer = 480; },
     golden_shield() { state.player.shieldTimer = 360; },
     wealth_rain() { addScore(2000); },
-    jade_barrier() { state.player.shieldTimer = 300; },
+    jade_barrier() { state.player.shieldTimer = 240; },
     swift_blade() { state.player.strikeTimer = 300; },
     golden_blessing() { addScore(500); state.player.scoreMul *= 2; state.player._wealthTimer = 480; },
 };
