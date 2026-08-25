@@ -22,14 +22,14 @@ export const BOSS_CANDIDATES = {
     ],
     20: [
         {
-            name: "腐化母体", color: "#b26bff", hp: 125, bulletSpeed: 1.50,
+            name: "腐化母体", color: "#b26bff", hp: 165, bulletSpeed: 1.50,
             bossType: "mother", tier: 1,
             skills: ["summon", "slam"],
             patterns: ["ring", "split"],
             desc: "召唤腐化植物，治疗花与毒花并存",
         },
         {
-            name: "剧毒核心", color: "#e05a5a", hp: 125, bulletSpeed: 1.45,
+            name: "剧毒核心", color: "#e05a5a", hp: 165, bulletSpeed: 1.45,
             bossType: "mother", tier: 1,
             skills: ["summon", "slam"],
             patterns: ["wave", "ring"],
