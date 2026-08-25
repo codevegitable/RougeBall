@@ -493,13 +493,14 @@ function killHooks(cx, cy, opts) {
 
     // ── 仅方块：生命回复类 ──
     if (fromBlock) {
-        // 分裂之球：每击碎 N 个方块生成一个新球
-        state.breakCounter++;
-        const interval = breaks.split_ball ? 5 : 10;
-        if (state.breakCounter >= interval) {
-            state.breakCounter = 0;
-            spawnExtraBalls(1);
-            spawnFloatingText(cx, cy - 20, "分裂 +1球", PAL.teal3);
+        // 分裂之球：每击碎 5 个方块生成一个新球
+        if (breaks.split_ball) {
+            state.breakCounter++;
+            if (state.breakCounter >= 5) {
+                state.breakCounter = 0;
+                spawnExtraBalls(1);
+                spawnFloatingText(cx, cy - 20, "分裂 +1球", PAL.teal3);
+            }
         }
         // 吸血之触
         if (p.healChance > 0 && Math.random() < p.healChance) {
