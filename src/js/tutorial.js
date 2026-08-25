@@ -113,6 +113,87 @@ const GUIDES = {
             "成功可获得罕见奖励，失败则损失半条生命。",
         ],
     },
+    // ── 特殊方块引导 ──
+    explosive: {
+        title: "爆炸方块",
+        icon: "bomb",
+        lines: [
+            "击碎时会对上下左右相邻方块各造成 1 点伤害。",
+            "连锁爆炸可引发连环反应，一次性清掉大片方块。",
+        ],
+    },
+    heal: {
+        title: "治疗方块",
+        icon: "heart",
+        lines: [
+            "血量显著高于普通方块。",
+            "击碎后恢复 0.5 条命，关键时刻能救你一命。",
+        ],
+    },
+    bounce: {
+        title: "弹射方块",
+        icon: "arrowR",
+        lines: [
+            "击中时球会以极端角度竖直反弹。",
+            "弹道难以预测，注意站位避免球直接落地。",
+        ],
+    },
+    reward: {
+        title: "奖励方块",
+        icon: "coin",
+        lines: [
+            "金色菱形标记的稀有方块，30 秒后自动消失。",
+            "击碎后必定获得一个稀有奖励，优先处理！",
+        ],
+    },
+    chain: {
+        title: "连锁方块",
+        icon: "lightning",
+        lines: [
+            "击碎时释放闪电链，对周围方块造成连锁伤害。",
+            "连锁最多传递 5 次，适合清理密集区域。",
+        ],
+    },
+    power: {
+        title: "强化方块",
+        icon: "sword",
+        lines: [
+            "击碎后所有球变大，伤害 +1，持续 8 秒。",
+            "效果可叠加，连续击碎能维持全程强化。",
+        ],
+    },
+    spread: {
+        title: "扩散方块",
+        icon: "fire",
+        lines: [
+            "击碎时释放 3 圈冲击波，对周围方块造成扩散伤害。",
+            "冲击波范围广，适合清理分散的方块。",
+        ],
+    },
+    momentum: {
+        title: "加速方块",
+        icon: "hourglass",
+        lines: [
+            "击碎后所有球速度 +30%，持续 6 秒。",
+            "每次击碎方块都会延长加速持续时间。",
+        ],
+    },
+    impact: {
+        title: "重击方块",
+        icon: "star",
+        lines: [
+            "只有高速球（速度 ≥130%）才能造成双倍伤害。",
+            "击碎后额外奖励金币，速度不足时无法造成伤害。",
+        ],
+    },
+    splitter: {
+        title: "分裂方块",
+        icon: "ball",
+        lines: [
+            "击碎后根据方块血量分裂出 1-3 个青色小球。",
+            "小球会向四周弹射，帮助清理剩余方块。",
+        ],
+    },
     // ── Boss 介绍（按 tier 分 4 条，动态生成当前 Boss 的机制说明） ──
     boss1: {
         title: "BOSS 来袭",
@@ -228,6 +309,16 @@ export function checkPendingGuides() {
     if (state.blocks.some((b) => b.indestructible)) queueGuideOnce("unbreakable");
     if (state.blocks.some((b) => b.moving)) queueGuideOnce("moving");
     if (state.blocks.some((b) => b.armored)) queueGuideOnce("armored");
+    if (state.blocks.some((b) => b.explosive)) queueGuideOnce("explosive");
+    if (state.blocks.some((b) => b.heal)) queueGuideOnce("heal");
+    if (state.blocks.some((b) => b.bounce)) queueGuideOnce("bounce");
+    if (state.blocks.some((b) => b.reward)) queueGuideOnce("reward");
+    if (state.blocks.some((b) => b.chain)) queueGuideOnce("chain");
+    if (state.blocks.some((b) => b.power)) queueGuideOnce("power");
+    if (state.blocks.some((b) => b.spread)) queueGuideOnce("spread");
+    if (state.blocks.some((b) => b.momentum)) queueGuideOnce("momentum");
+    if (state.blocks.some((b) => b.impact)) queueGuideOnce("impact");
+    if (state.blocks.some((b) => b.splitter)) queueGuideOnce("splitter");
 }
 
 // 关闭当前引导并记为已看；队列中还有未展示的接着弹

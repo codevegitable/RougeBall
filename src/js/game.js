@@ -353,18 +353,26 @@ export function skipReward() {
 
 export function cancelSkillSwap() {
     state.pendingSkillDef = null;
-    state.gameState = STATE.LEVEL_REWARD;
+    state.gameState = state._prevGameState || STATE.LEVEL_REWARD;
+    state._prevGameState = null;
 }
 
 export function confirmSkillSwap(oldIndex) {
     const def = state.pendingSkillDef;
     if (!def) {
-        state.gameState = STATE.LEVEL_REWARD;
+        state.gameState = state._prevGameState || STATE.LEVEL_REWARD;
+        state._prevGameState = null;
         return;
     }
     replaceSkill(oldIndex, def);
     state.pendingSkillDef = null;
-    finalizeRewardStage();
+    const prev = state._prevGameState;
+    state._prevGameState = null;
+    if (prev === STATE.EVENT) {
+        state.gameState = STATE.EVENT;
+    } else {
+        finalizeRewardStage();
+    }
 }
 
 // 奖励阶段结束：进入 Boss / 事件房 / 下一关

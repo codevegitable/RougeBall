@@ -1,4 +1,4 @@
-import { RARITY, MAX_BALLS, BALL_BASE_SPEED, BALL_RADIUS } from "./constants.js";
+import { RARITY, MAX_BALLS, BALL_BASE_SPEED, BALL_RADIUS, STATE, MAX_SKILLS } from "./constants.js";
 import { state, addScore } from "./state.js";
 import { spawnFloatingText } from "./fx.js";
 import { playSkillUse } from "./sound.js";
@@ -153,6 +153,13 @@ export function getInitialRewardChoices(count) {
 export function applyReward(def) {
     const p = state.player;
     if (def.type === "skill") {
+        const effectiveMax = Math.max(1, MAX_SKILLS - (p.curseSkillSlotPenalty || 0));
+        if (p.skills.length >= effectiveMax) {
+            state.pendingSkillDef = def;
+            state._prevGameState = state.gameState;
+            state.gameState = STATE.SKILL_SWAP;
+            return;
+        }
         p.skills.push({ id: def.id, cd: 0 });
     } else {
         p.perks[def.id] = (p.perks[def.id] || 0) + 1;
@@ -252,8 +259,9 @@ export function recalcStats() {
     p.lifesaverLeft = Math.max(0, p.lifesaverLeft - p.curseLuckPenalty * 0.2);
     // 治疗效果减益
     p.healMul = Math.max(0.05, 1 - (p.curseHealPenalty || 0));
-    if (p.curseSkillSlotPenalty > 0) {
-        while (p.skills.length > 1) p.skills.pop();
+    const effectiveMax = Math.max(1, MAX_SKILLS - (p.curseSkillSlotPenalty || 0));
+    if (p.skills.length > effectiveMax) {
+        p.skills.splice(effectiveMax);
     }
 
     // 初始奖励（开局独立池）效果

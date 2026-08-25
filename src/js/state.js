@@ -38,6 +38,7 @@ export const state = {
     rewardTitle: "",
     rareOnly: false,
     pendingSkillDef: null,
+    _prevGameState: null,
     currentEvent: null,
     eventResult: null, // 事件结果面板内容 {text, color}
     pendingChallenge: false, // 事件选择了限时挑战

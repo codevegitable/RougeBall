@@ -44,8 +44,24 @@ function drawTopBar() {
     const scoreX = 14 + lvW + 6 + measure("层", 12) + 16;
     pTextShadow(`${Math.floor(p.score / 10)} 分`, scoreX, 32, PAL.mist0, { size: 13, bold: true });
 
+    // ── 中：限时挑战倒计时（最高优先级） ──
+    if (state.challenge) {
+        const c = state.challenge;
+        const seconds = Math.ceil(c.limit / 60);
+        const color = seconds <= 10 ? PAL.blood3 : PAL.ember2;
+        const breakable = state.blocks.filter((b) => !b.indestructible && !b.bonusOnly).length;
+        const broke = Math.max(0, c.initialBreakable - breakable);
+        const done = broke >= c.target;
+        const GAP = 9;
+        pTextShadow(`${seconds}s`, W / 2 - GAP, 32, color, { size: 18, bold: true, align: "right" });
+        pRect(W / 2 - PX, 18, PX, 16, PAL.ink3);
+        pTextShadow(
+            `${Math.min(broke, c.target)}/${c.target}`, W / 2 + GAP, 32,
+            done ? PAL.moss3 : PAL.ember2,
+            { size: 15, bold: true, align: "left" }
+        );
     // ── 中：普通关卡倒计时（主球发射前计时未启动，暗色显示） ──
-    if (state.levelTimer > 0 && !state.boss) {
+    } else if (state.levelTimer > 0 && !state.boss) {
         const seconds = Math.ceil(state.levelTimer / 60);
         const color = state.levelTimerStarted
             ? (seconds <= 10 ? PAL.blood3 : PAL.mist1)
@@ -53,13 +69,10 @@ function drawTopBar() {
         const timeStr = `${seconds}s`;
         const target = state.levelTimerTarget || 0;
         if (target > 0) {
-            // 计时器右对齐到中线左侧、进度左对齐到中线右侧，中间放一根竖分隔线。
-            // 用对齐方式而不是"量宽度再算起点"来定位：秒数位数会变（3 位→2 位→1 位），
-            // 靠测量拼接会让两段文字在数字跳变时互相挤压甚至重叠。
             const breakable = state.blocks.filter((b) => !b.indestructible && !b.bonusOnly).length;
             const broke = Math.max(0, Math.min(target, state.levelTimerTotal - breakable));
             const done = broke >= target;
-            const GAP = 9; // 中线到两侧文字的间距
+            const GAP = 9;
             pTextShadow(timeStr, W / 2 - GAP, 32, color, { size: 18, bold: true, align: "right" });
             pRect(W / 2 - PX, 18, PX, 16, PAL.ink3);
             pTextShadow(
@@ -179,17 +192,6 @@ function drawSkillSlots() {
 function drawStatusChips() {
     const p = state.player;
     const chips = [];
-
-    // 限时挑战优先级最高
-    if (state.challenge) {
-        const c = state.challenge;
-        const breakable = state.blocks.filter((b) => !b.indestructible && !b.bonusOnly).length;
-        const broke = c.initialBreakable - breakable;
-        chips.push({
-            label: `挑战 ${Math.min(broke, c.target)}/${c.target}·${Math.ceil(c.limit / 60)}s`,
-            color: PAL.ember2, icon: "timer",
-        });
-    }
 
     if (p.ballDamage > 1) chips.push({ label: `伤害+${(p.ballDamage - 1).toFixed(0)}`, color: PAL.blood3, icon: "sword" });
     if (p.maxPiercing > 0) chips.push({ label: `穿透×${p.maxPiercing}`, color: PAL.arc3, icon: "pierce" });

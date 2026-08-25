@@ -4,6 +4,7 @@ import { spawnParticles } from "./particles.js";
 import { screenShake, hitStop, flashPaddle, spawnRing, spawnFloatingText, playerHurt } from "./fx.js";
 import { damageBoss, bulletColor, purgeBossSummons } from "./boss.js";
 import { grantEventReward } from "./events.js";
+import { spawnExtraBalls } from "./rewards.js";
 import {
     playWallHit,
     playPaddleHit,
@@ -492,6 +493,14 @@ function killHooks(cx, cy, opts) {
 
     // ── 仅方块：生命回复类 ──
     if (fromBlock) {
+        // 分裂之球：每击碎 N 个方块生成一个新球
+        state.breakCounter++;
+        const interval = breaks.split_ball ? 5 : 10;
+        if (state.breakCounter >= interval) {
+            state.breakCounter = 0;
+            spawnExtraBalls(1);
+            spawnFloatingText(cx, cy - 20, "分裂 +1球", PAL.teal3);
+        }
         // 吸血之触
         if (p.healChance > 0 && Math.random() < p.healChance) {
             p.lives += 1 * (p.healMul || 1);
