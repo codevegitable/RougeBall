@@ -841,7 +841,8 @@ export function updateBalls() {
                 }
                 let bdmg = ballDamageOf(b);
                 // 铁壁执行者：正面减伤（球从下方打正面），背面增伤（球从上方打背）
-                if (bo.bossType === "executor") {
+                // 终焉聚合体一阶（钢铁甲壳）复刻同一机制
+                if (bo.bossType === "executor" || (bo.bossType === "final" && bo.phase === 0)) {
                     if (ny > 0.3) {
                         bdmg = Math.max(1, Math.round(bdmg * 0.25));
                         spawnFloatingText(bo.x, bo.y - bo.r - 26, "正面!", PAL.mist1);

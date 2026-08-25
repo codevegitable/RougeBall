@@ -80,7 +80,25 @@ const PRIEST = [
     "....KKKKKKKKK....",
 ];
 
-const SPRITES = { executor: EXECUTOR, mother: MOTHER, hive: HIVE, priest: PRIEST };
+// ── 终焉审判 / 虚空领主：额冠聚合体，双目 ──
+const FINAL = [
+    "....KKKKKKKKK....",
+    "....KAAAAAAAK....",
+    "..KKAAAAAAAAAKK..",
+    ".KDDBBBBBBBBDDK..",
+    "KDDBBLKKBKKLBBDDK",
+    "KDDBBLKEBKELBBDDK",
+    "KDDBBLKEBKELBBDDK",
+    "KDBBLKKBKKLBBBDDK",
+    "KDBBBLLLLLLLBBBDK",
+    "KDDBBBAAAAABBBDDK",
+    ".KDDBBBAAABBBDDK.",
+    "..KKDDBBBBBDDKK..",
+    "....KKDDDDDKK....",
+    "......KKKKK......",
+];
+
+const SPRITES = { executor: EXECUTOR, mother: MOTHER, hive: HIVE, priest: PRIEST, final: FINAL };
 
 // 每个色系的四档明暗都直接取自调色板，而不是算术推导——
 // 推导出的中间色会落在调色板之外，让画面出现"脏色"。

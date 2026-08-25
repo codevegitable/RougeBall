@@ -135,6 +135,36 @@ const LASER = {
 // 阶段切换时的喘息窗口：清场 + 易伤，让玩家有时间读懂"打法变了"
 const HIVE_PHASE_BREATHER = 90;
 
+// ═══ 终焉聚合体（tier 4）四阶段 ═══
+//
+// 设计目标：第 50 层的 Boss 不再是第四层司祭的"换皮加血"，而是一次
+// 把前四层 Boss 的看家本领依次复刻成四个阶段的长局。玩家要在最终战里
+// 按顺序应对四种已学过的打法，且每一种都带一点强化：
+//   P1（HP>75%）钢铁甲壳：执行者式冲锋+跳砸，保留正面减伤/背面增伤
+//   P2（75~50%）腐化内核：母体式召唤（治疗/毒/藤蔓×变种）
+//   P3（50~25%）蜂群武装：蜂巢式主炮激光 + 低频追踪弹（比蜂巢 P3 多一层压力）
+//   P4（25~0% ）司祭之眼：诅咒祭坛 + 可打断蓄力大招 + 冲锋
+// 阶段推进与蜂巢同源（按 HP 阈值 while 推进），切换时清场 + 短暂易伤喘息。
+// 弹速乘性随阶段递增（每阶 +10%），让终局的压迫感沿阶段爬升。
+//
+// 时长预算（玩家 DPS ≈12，与蜂巢注释同一套假设）：
+// 每阶 150 HP 各约 12.5s，合计 ≈50s；阶段喘息与激光易伤窗提供 ×1.5 窗口，
+// 实际约 45~55s——比蜂巢的 38s 长一档，符合最终战的期望体量。
+const FINAL_PHASES = [
+    { at: 0.75, skills: ["charge", "slam"], patterns: ["fan"], label: "一阶·钢铁甲壳" },
+    { at: 0.50, skills: ["summon", "slam"], patterns: ["ring", "wave"], label: "二阶·腐化内核" },
+    { at: 0.25, skills: [], patterns: ["homing"], label: "三阶·蜂群武装" },
+    { at: 0, skills: ["altar", "ultimate", "charge"], patterns: ["split", "homing", "fan"], label: "终阶·司祭之眼" },
+];
+
+// P3 追踪弹节奏：周期拉到 150~190 帧、每波 2 发。
+// 蜂巢 P3 是"纯激光"命题，终焉三阶则在其上叠一层低频追踪压迫，
+// 周期拉长是为了给激光预警窗留出干净的读图空间。
+const FINAL_P3 = { volleyMin: 150, volleyRand: 40, fanCount: 2 };
+
+// 阶段切换喘息（60 帧：比蜂巢的 90 短——这是最终战，喘息不宜过度）
+const FINAL_PHASE_BREATHER = 60;
+
 export function createBoss(level) {
     const candidates = BOSS_CANDIDATES[level];
     const def = candidates[Math.floor(Math.random() * candidates.length)];
@@ -176,7 +206,7 @@ t: 0,
         spiralFrames: 0, spiralAngle: 0, spiralTick: 0,
         homingQueue: 0, homingTick: 0,
         dash: null, dashCd: 0,
-        // 激光（蜂巢三阶段专属）
+        // 激光（蜂巢三阶段 / 终焉三阶共用）
         lasers: [],        // 当前波次的束 {ang, x0, y0, hit}，空数组=闲置
         laserPhase: "",    // "warn" | "fire" | ""
         laserPhaseTimer: 0,
@@ -191,6 +221,11 @@ t: 0,
     state.boss.volleyTimer = 60;
     // 蜂巢 Boss 追踪弹间隔延长 1/3
     if (def.bossType === "hive") state.boss.homingInterval = 21;
+    // 终焉聚合体：起始技能池/弹幕由阶段表决定（def 中的仅供图鉴展示）
+    if (def.bossType === "final") {
+        state.boss.skills = FINAL_PHASES[0].skills;
+        state.boss.patterns = FINAL_PHASES[0].patterns;
+    }
     // 记录遭遇（用于图鉴）
     const log = loadBossLog();
     log.add(def.name);
@@ -200,7 +235,16 @@ t: 0,
 export function updateBoss() {
     const boss = state.boss;
     if (!boss) return;
-    if (state.player.freezeTimer > 0) return;
+    // 时间暂停（The World）：Boss 本体、召唤物、弹幕全部冻结。
+    // 但受击冷却与闪白必须继续递减——damageBoss 在 hitCooldown>0 期间拒绝伤害，
+    // 冷却一旦跟着冻结，4 秒内除第一击外的所有命中都会被吞掉，
+    // "时间暂停"就会反过来变成 Boss 的免伤盾。
+    if (state.player.freezeTimer > 0) {
+        const fdt = state.dt;
+        boss.flash = Math.max(0, boss.flash - 0.08 * fdt);
+        boss.hitCooldown = Math.max(0, boss.hitCooldown - fdt);
+        return;
+    }
     const dt = state.dt;
     boss.t += dt;
     boss.flash = Math.max(0, boss.flash - 0.08 * dt);
@@ -216,7 +260,9 @@ export function updateBoss() {
     // 蜂巢激光波期间必须定住：Boss 的常态飘移是 ±140px 正弦，最大 1.68px/帧，
     // 40 帧开火期就能把束横移 67px——那正是"扫射"，会把已经躲对位置的玩家扫回去。
     // 定住 Boss 同时保证预警细线始终连在炮口上，玩家读得出光是从哪儿来的。
-    const laserLocked = boss.bossType === "hive" && (boss.laserPhase === "warn" || boss.laserPhase === "fire");
+    // 终焉三阶复用同一套激光，"不许扫射"的约束同样成立。
+    const laserLocked = (boss.bossType === "hive" || (boss.bossType === "final" && boss.phase === 2)) &&
+        (boss.laserPhase === "warn" || boss.laserPhase === "fire");
     if (!movingAction && !laserLocked) {
         boss.x = W / 2 + Math.sin(boss.t * 0.012) * 140;
         boss.y = 130 + Math.sin(boss.t * 0.023) * 20;
@@ -229,6 +275,17 @@ export function updateBoss() {
         updateMinions(boss, dt);
         // 蜂巢不生成祭坛，但仍要调用——该函数同时负责把 altarDmgP/SpeedP/CdP
         // 复位成默认值，跳过它会让上一场 Boss 的诅咒残留在玩家身上。
+        altarCurseEffects();
+        updateBossBullets();
+        updateDangerZones();
+        return;
+    }
+
+    // 终焉聚合体：四阶段轮回（见 FINAL_PHASES）。与蜂巢同样走专属状态机——
+    // 通用状态机只能从固定技能池轮换，表达不了"阶段内只做某些事"。
+    if (boss.bossType === "final") {
+        updateFinalBoss(boss, dt);
+        updateMinions(boss, dt);
         altarCurseEffects();
         updateBossBullets();
         updateDangerZones();
@@ -337,6 +394,87 @@ function onHivePhaseEnter(boss) {
     boss.laserTimer = 40;
     const label = boss.phase === 1 ? "第二阶段：蜂群部署！无人机来袭" : "第三阶段：主炮充能！预警期击打可打断";
     spawnFloatingText(boss.x, boss.y - 60, label, boss.color);
+    screenShake(8, 200);
+    playBossShoot();
+}
+
+// ═══ 终焉聚合体：四阶段驱动 ═══════════════════════════════
+function updateFinalBoss(boss, dt) {
+    finalPhaseCheck(boss);
+
+    // 阶段切换喘息：清场 + 易伤，期间不做任何攻击
+    if (boss.recoverTimer > 0) {
+        boss.recoverTimer -= dt;
+        boss.vulnerable = true;
+        if (boss.recoverTimer <= 0) {
+            boss.vulnerable = false;
+            boss.action = null;
+            boss.actionCooldown = 15 + Math.random() * 15;
+        }
+        return;
+    }
+
+    if (boss.phase === 2) {
+        // P3 蜂群武装：主炮激光（复用蜂巢 P3 全套机制）+ 低频追踪弹。
+        // updateLasers 自带每波结束的易伤窗口（LASER.recover），
+        // 会被上面的喘息门消费，节奏与蜂巢 P3 完全一致。
+        updateLasers(boss, dt);
+        fireHiveVolley(boss, dt, FINAL_P3);
+        return;
+    }
+
+    // P1 / P2 / P4：通用技能状态机，技能池由 finalPhaseCheck 按阶段换装
+    if (boss.actionCooldown > 0) {
+        boss.actionCooldown -= dt;
+        if (boss.actionCooldown <= 0) {
+            boss.actionCooldown = 0;
+            pickNextAction(boss);
+        }
+    }
+    if (boss.action) {
+        executeAction(boss, dt);
+    } else {
+        fireVolley(boss, dt);
+        tickSustainedPatterns(boss, dt);
+    }
+}
+
+function finalPhaseCheck(boss) {
+    const ratio = boss.hp / boss.maxHp;
+    while (boss.phase < FINAL_PHASES.length && ratio < FINAL_PHASES[boss.phase].at) {
+        boss.phase++;
+        onFinalPhaseEnter(boss);
+    }
+}
+
+function onFinalPhaseEnter(boss) {
+    // 清场：旧阶段的威胁不跨进新阶段（与蜂巢同理，让玩家读得出"打法换了"）。
+    // 上一阶段正在放激光/冲锋时跨阈值，也要把残留的束与动作撤掉。
+    state.bossBullets.length = 0;
+    for (const m of boss.minions) spawnParticles(m.x, m.y, m.color || PAL.bone1, 10);
+    boss.minions.length = 0;
+    boss.minionRespawn = {};
+    if (boss.altars) boss.altars.length = 0;
+    boss.lasers.length = 0;
+    boss.laserPhase = "";
+    boss.laserHits = 0;
+    boss.action = null;
+    boss.homingQueue = 0;
+    boss.spiralFrames = 0;
+
+    // 换装：技能池与弹幕模式随阶段切换
+    const cfg = FINAL_PHASES[boss.phase];
+    boss.skills = cfg.skills;
+    boss.patterns = cfg.patterns;
+
+    // 喘息易伤窗 + 首波攻击延迟
+    boss.recoverTimer = FINAL_PHASE_BREATHER;
+    boss.vulnerable = true;
+    boss.volleyTimer = 60;
+    boss.laserTimer = 40;
+    boss.actionCooldown = 15 + Math.random() * 15;
+
+    spawnFloatingText(boss.x, boss.y - 60, cfg.label, boss.color);
     screenShake(8, 200);
     playBossShoot();
 }
@@ -561,8 +699,9 @@ function onLaserHit(beam) {
     screenShake(11, 260);
     playPlayerHit();
     spawnParticles(px, py, PAL.blood3, 14);
-    // 蜂巢激光伤害 3 点
+    // 蜂巢激光伤害 3 点；终焉主炮 2 点（最终战给强化角色留出容错）
     if (state.boss?.bossType === "hive") loseLife(3);
+    else if (state.boss?.bossType === "final") loseLife(2);
     else loseLife(1);
 }
 
@@ -1205,7 +1344,9 @@ function fireVolley(boss, dt) {
 }
 
 function fireVolleySingle(boss, pattern) {
-    const spd = boss.bulletSpeed * (1 + boss.phase * 0.1);
+    // 普通 Boss 二阶段 +10% 弹速；终焉四阶段每阶 +10%，压迫感沿阶段爬升
+    const phasePush = boss.bossType === "final" ? Math.min(3, boss.phase) : boss.phase;
+    const spd = boss.bulletSpeed * (1 + phasePush * 0.1);
     switch (pattern) {
         case "fan": aimedFan(boss, spd, 3 + Math.round(tierWeight(boss.tier) * 0.8)); break;
         case "ring": ringBurst(boss, spd * 0.85, 6 + Math.round(tierWeight(boss.tier) * 1.6)); break;
@@ -1272,9 +1413,10 @@ export function damageBoss(dmg, silent = false) {
     if (boss.action && boss.action.type === "ultimate" && boss.action.phase === "warn") {
         if (Math.random() < 0.3) interruptBossUltimate();
     }
-    // 蜂巢 P3：预警期打够次数可打断本波激光（确定性，非概率——
+    // 蜂巢 P3、终焉三阶：预警期打够次数可打断本波激光（确定性，非概率——
     // 玩家要为此主动把球送上去，不该再赌一次骰子）
-    if (boss.bossType === "hive" && boss.phase === 2) tryInterruptLaser(boss);
+    if ((boss.bossType === "hive" && boss.phase === 2) ||
+        (boss.bossType === "final" && boss.phase === 2)) tryInterruptLaser(boss);
     if (boss.hp <= 0) defeatBoss();
 }
 
@@ -1552,7 +1694,11 @@ export function drawBossBar() {
 
     // 名称 + 状态
     let label = boss.name;
-    if (boss.phase > 0) label += " · 二阶段";
+    if (boss.bossType === "final") {
+        label += ` · ${FINAL_PHASES[Math.min(boss.phase, FINAL_PHASES.length - 1)].label}`;
+    } else if (boss.phase > 0) {
+        label += " · 二阶段";
+    }
     if (boss.vulnerable) label += " · 易伤";
     pText(label, W / 2, by - PX, boss.vulnerable ? PAL.gold3 : PAL.bone1, {
         size: 13, bold: true, align: "center",

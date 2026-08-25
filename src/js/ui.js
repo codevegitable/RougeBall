@@ -1011,7 +1011,7 @@ export function drawCodex() {
 }
 
 function bossTypeLabel(type) {
-    return { executor: "执行者", mother: "腐化体", hive: "机械蜂巢", priest: "司祭" }[type] || type;
+    return { executor: "执行者", mother: "腐化体", hive: "机械蜂巢", priest: "司祭", final: "终焉聚合体" }[type] || type;
 }
 
 // 图鉴条目点击命中
@@ -1033,6 +1033,7 @@ function drawCodexItemDetail(item) {
         slam: "跳砸：跃起砸向地面，冲击波覆盖大范围",
         summon: "召唤：召唤各类仆从助战，击杀会反噬 Boss",
         altar: "祭坛：部署诅咒祭坛，需要优先摧毁解除诅咒",
+        ultimate: "蓄力：读条大招，可被打断；完成后多波环形弹幕爆发",
     };
 
     const PATTERN_DESC = {
@@ -1045,8 +1046,9 @@ function drawCodexItemDetail(item) {
     };
 
     const lines = [
-        `第 ${boss.level} 层 · ${boss.bossType}`,
+        `第 ${boss.level} 层 · ${bossTypeLabel(boss.bossType)}`,
         "",
+        ...(boss.desc ? [boss.desc, ""] : []),
         "【技能】",
         ...(boss.skills || []).map((s) => `  ${SKILL_DESC[s] || s}`),
         "",
