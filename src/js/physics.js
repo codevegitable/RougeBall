@@ -698,7 +698,7 @@ export function updateBalls() {
 
         // 速度区间：区间外（y < SPEED_ZONE_Y）速度 ×N，区间内恢复正常
         const sz = GAME_CONFIG.speedZone;
-        if (sz.enabled && b.launched) {
+        if (sz.enabled && b.launched && !state.boss) {
             const baseSpeed = BALL_BASE_SPEED * p.ballSpeedMul;
             if (b.y < SPEED_ZONE_Y) {
                 const targetSpeed = baseSpeed * sz.multiplier;

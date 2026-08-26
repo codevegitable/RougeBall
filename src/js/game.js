@@ -640,8 +640,8 @@ export function launchBalls() {
         if (!b.launched) {
             launchedAny = true;
             b.launched = true;
-            // 发球时速度 ×N（区间外高速）
-            const launchMul = GAME_CONFIG.speedZone.enabled ? GAME_CONFIG.speedZone.multiplier : 1;
+            // 发球时速度 ×N（区间外高速，Boss 战不生效）
+            const launchMul = GAME_CONFIG.speedZone.enabled && !state.boss ? GAME_CONFIG.speedZone.multiplier : 1;
             b.speed = BALL_BASE_SPEED * state.player.ballSpeedMul * launchMul;
             const angle = ((Math.random() * 20 - 10 - 90) * Math.PI) / 180;
             b.vx = Math.cos(angle) * b.speed;
