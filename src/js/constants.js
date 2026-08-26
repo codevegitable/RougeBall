@@ -83,3 +83,8 @@ export const BALL_SPEED_CAP = 1.5; // 相对基础速度的上限
 
 // ─── 技能 ─────────────────────────────────────────────────
 export const MAX_SKILLS = 2;
+
+// ─── 球速区间 ─────────────────────────────────────────────
+// 距离下方墙壁 2/7 处为界：区间内接球速度正常，区间外与发球时速度 ×4
+export const SPEED_ZONE_Y = Math.floor(H * 5 / 7); // ≈ 428
+export const LAUNCH_SPEED_MUL = 4;
