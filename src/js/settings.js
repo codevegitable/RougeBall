@@ -6,6 +6,7 @@ const DEFAULTS = {
     screenShake: true,
     hitStop: true,
     eventChance: 0.3,
+    speedZone: { enabled: true, multiplier: 4 },
 };
 
 export function loadSettings() {
@@ -29,4 +30,6 @@ export function applySettings(s, config) {
     config.screenShake = s.screenShake;
     config.hitStop = s.hitStop;
     config.event.chance = s.eventChance;
+    config.speedZone.enabled = s.speedZone.enabled;
+    config.speedZone.multiplier = s.speedZone.multiplier;
 }

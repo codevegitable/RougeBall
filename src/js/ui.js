@@ -1093,6 +1093,8 @@ export function drawSettingsScreen() {
         { label: "震屏", get: () => s.screenShake, set: (v) => { s.screenShake = v; saveSettings(s); } },
         { label: "击中停顿", get: () => s.hitStop, set: (v) => { s.hitStop = v; saveSettings(s); } },
         { label: "事件概率", type: "slider", get: () => s.eventChance, set: (v) => { s.eventChance = v; saveSettings(s); } },
+        { label: "球速加速", get: () => s.speedZone.enabled, set: (v) => { s.speedZone.enabled = v; saveSettings(s); } },
+        { label: "加速倍率", type: "slider", get: () => (s.speedZone.multiplier - 1) / 9, set: (v) => { s.speedZone.multiplier = Math.round(1 + v * 9); saveSettings(s); }, format: (v) => `×${Math.round(1 + v * 9)}` },
     ];
 
     const rowH = 40, gap = 8;
@@ -1115,7 +1117,8 @@ export function drawSettingsScreen() {
             const sw = 132;
             const sx = bx + bw - sw - 12;
             pBar(sx, by + 10, sw, 20, val, PAL.gold2, { bg: PAL.ink0, light: PAL.gold3 });
-            pText(`${Math.round(val * 100)}%`, sx + sw / 2, by + 25, PAL.ink0, {
+            const label = item.format ? item.format(val) : `${Math.round(val * 100)}%`;
+            pText(label, sx + sw / 2, by + 25, PAL.ink0, {
                 size: 11, bold: true, align: "center", outline: null,
             });
             settingsToggleBtns.push({ x: sx, y: by, w: sw, h: rowH, type: "slider", item });

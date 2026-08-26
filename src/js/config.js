@@ -9,4 +9,8 @@ export const GAME_CONFIG = {
     event: {
         chance: 0.20, // 通过关卡后进入事件房的概率
     },
+    speedZone: {
+        enabled: true,
+        multiplier: 4,
+    },
 };
