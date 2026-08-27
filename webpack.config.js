@@ -87,6 +87,7 @@ module.exports = (env, argv) => {
         plugins: [
             new HtmlWebpackPlugin({
                 template: "src/index.html",
+                inject: "body",
             }),
             ...(isProd ? [new InlineSingleFilePlugin()] : []),
         ],
