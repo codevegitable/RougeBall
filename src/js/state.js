@@ -54,6 +54,8 @@ export const state = {
     levelTimerStarted: false, // 主球未发射前不开始倒计时
     levelTimerTarget: 0, // 需要击碎的可击碎方块数
     levelTimerTotal: 0, // 初始可击碎方块总数
+    levelTargetReached: false, // 本关是否已达到目标击碎数
+    levelCompletePrompted: false, // 是否已向玩家展示过关提示
     time: 0, // 全局帧计数
     dt: 1, // 本帧相对 60fps 的时间倍率（帧率无关物理）
     lastTs: 0,

@@ -531,6 +531,33 @@ export function drawBossClear() {
     });
 }
 
+// ═══ 过关提示（达标后自行选择是否进入下一关）═════════════
+let levelCompleteProceedBtn = null, levelCompleteStayBtn = null;
+
+export function drawLevelCompletePrompt() {
+    const m = pModal(380, 200, "目标达成", { icon: "check", accent: PAL.moss2, scrim: 0.82 });
+
+    const breakable = state.blocks.filter(b => !b.indestructible && !b.bonusOnly).length;
+    const broke = state.levelTimerTotal - breakable;
+    pTextShadow(
+        `已击碎 ${broke} / ${state.levelTimerTarget} 个方块`,
+        W / 2, m.y + PX * 15, PAL.mist1, { size: 13, align: "center" }
+    );
+    pTextShadow("已达过关目标，是否进入下一关？", W / 2, m.y + PX * 21, PAL.bone1, { size: 12, align: "center" });
+
+    const bw = 160;
+    const gap = 16;
+    const totalW = bw * 2 + gap;
+    const bx = (W - totalW) / 2;
+    const by = m.y + PX * 28;
+
+    levelCompleteProceedBtn = pButton(bx, by, bw, BTN_H, "进入下一关", { kind: "primary", size: 14 });
+    levelCompleteStayBtn = pButton(bx + bw + gap, by, bw, BTN_H, "继续收集", { kind: "secondary", size: 14 });
+}
+
+export const hitLevelCompleteProceed = (x, y) => inRect(x, y, levelCompleteProceedBtn);
+export const hitLevelCompleteStay = (x, y) => inRect(x, y, levelCompleteStayBtn);
+
 // ═══ 暂停 ═══════════════════════════════════════════════
 export function drawPauseScreen() {
     const m = pModal(420, 344, "已暂停", { icon: "hourglass", scrim: 0.74 });

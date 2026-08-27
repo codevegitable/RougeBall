@@ -39,6 +39,7 @@ export const STATE = {
     STATUS: "status", // 角色状态总览
     DEV_MODE: "devMode", // 开发者模式
     SETTINGS: "settings", // 设置
+    LEVEL_COMPLETE: "levelComplete", // 达成本关目标，可自行选择是否进入下一关
     GAME_OVER: "gameOver",
     VICTORY: "victory",
 };

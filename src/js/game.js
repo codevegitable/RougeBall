@@ -201,6 +201,8 @@ export function loadLevel(num, skipCurse = false) {
         state.player.comboTimer = 0;
     }
     state.breakCounter = 0; // 分裂计数每关重置
+    state.levelTargetReached = false;
+    state.levelCompletePrompted = false;
     // 普通关卡时间限制：随关卡递增，需击碎比例从 50% 升至 90%
     if (state.player && !isBossLevel(num)) {
         const breakable = state.blocks.filter(b => !b.indestructible && !b.bonusOnly).length;
@@ -298,6 +300,10 @@ export function clearLevel() {
     const cleared = state.player.level;
     state.player.level++;
 
+    // 重置通关提示状态
+    state.levelTargetReached = false;
+    state.levelCompletePrompted = false;
+
     // 再生：每过 5 关恢复 1 条命
     if (state.player.perks?.init_regen) {
         state.player.regenCounter = (state.player.regenCounter || 0) + 1;
@@ -321,6 +327,19 @@ export function clearLevel() {
     state.gameState = STATE.LEVEL_REWARD;
     playLevelComplete();
     saveProgress();
+}
+
+// 在目标击碎数达标后，玩家选择进入下一关
+export function proceedToNextLevel() {
+    state.levelTargetReached = false;
+    state.levelCompletePrompted = false;
+    clearLevel();
+}
+
+// 在目标击碎数达标后，玩家选择继续留在当前关卡
+export function stayInLevel() {
+    state.levelCompletePrompted = true;
+    state.gameState = STATE.PLAYING;
 }
 
 // Boss 击破后的结算（必掉 Boss 专属奖励 + 获得 Boss 诅咒）
@@ -742,10 +761,28 @@ export function update(ts = 0) {
         return;
     }
 
+    // 检查是否达到目标击碎数：若达标且未提示过，弹出过关提示
+    if (!state.levelTargetReached) {
+        const breakable = state.blocks.filter(b => !b.indestructible && !b.bonusOnly).length;
+        const broke = state.levelTimerTotal - breakable;
+        if (broke >= state.levelTimerTarget) {
+            state.levelTargetReached = true;
+            if (!state.levelCompletePrompted) {
+                state.gameState = STATE.LEVEL_COMPLETE;
+                return;
+            }
+        }
+    }
+
     // 普通关卡倒计时：主球（黄球）未发射前不计时
     if (state.levelTimer > 0 && state.levelTimerStarted) {
         state.levelTimer -= state.dt;
         if (state.levelTimer <= 0) {
+            if (state.levelTargetReached) {
+                // 已达目标但玩家未主动选择：时间到，自动进入下一关
+                clearLevel();
+                return;
+            }
             const breakable = state.blocks.filter(b => !b.indestructible && !b.bonusOnly).length;
             const broke = state.levelTimerTotal - breakable;
             if (broke < state.levelTimerTarget) {

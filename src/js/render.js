@@ -24,6 +24,7 @@ import {
     drawCodex,
     drawGameOver,
     drawVictory,
+    drawLevelCompletePrompt,
 } from "./ui.js";
 import { drawGuideOverlay } from "./tutorial.js";
 
@@ -610,6 +611,7 @@ export function render() {
     }
     if (state.gameState === STATE.SKILL_SWAP) drawSkillSwap();
     if (state.gameState === STATE.EVENT) drawEventScreen();
+    if (state.gameState === STATE.LEVEL_COMPLETE) drawLevelCompletePrompt();
     if (state.gameState === STATE.BOSS_CLEAR) drawBossClear();
     if (state.gameState === STATE.CURSE_SELECT) drawCurseScreen();
     if (state.gameState === STATE.PAUSED) drawPauseScreen();

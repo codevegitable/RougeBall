@@ -29,6 +29,8 @@ import {
     quitToMenu,
     quitEventToMenu,
     update,
+    proceedToNextLevel,
+    stayInLevel,
 } from "./game.js";
 import { updateEffects } from "./fx.js";
 import { executeEventChoice } from "./events.js";
@@ -63,6 +65,8 @@ import {
     hitCodexPrev,
     hitCodexItem,
     hitCodexBackButton,
+    hitLevelCompleteProceed,
+    hitLevelCompleteStay,
 } from "./ui.js";
 import { initAudio, toggleSound } from "./sound.js";
 import { spawnFloatingText } from "./fx.js";
@@ -431,6 +435,17 @@ canvas.addEventListener("click", (e) => {
         handleSettingsClick(pos.x, pos.y);
         if (hitSettingsBackButton(pos.x, pos.y)) {
             state.gameState = STATE.MENU;
+        }
+        return;
+    }
+
+    if (state.gameState === STATE.LEVEL_COMPLETE) {
+        if (hitLevelCompleteProceed(pos.x, pos.y)) {
+            lock();
+            proceedToNextLevel();
+        } else if (hitLevelCompleteStay(pos.x, pos.y)) {
+            lock();
+            stayInLevel();
         }
         return;
     }
