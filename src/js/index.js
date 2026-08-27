@@ -1,4 +1,5 @@
 import "../css/style.css";
+import "../css/fonts.css";
 
 import { W, H, STATE } from "./constants.js";
 import { state } from "./state.js";
